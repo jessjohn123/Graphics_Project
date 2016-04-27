@@ -35,7 +35,8 @@ V_OUT main(V_IN input)
 	output.m_localCoord = localH;
 	// move local space vertex from vertex buffer into world space.
 	localH = mul(localH, worldMatrix);
-
+	//worldPosition = localH;
+	//output.posW = worldPosition;
 	// TODO: Move into view space, then projection space
 	localH = mul(localH, viewMatrix);
 	localH = mul(localH, projectionMatrix);

@@ -1,5 +1,6 @@
 SamplerState SampleType;
-Texture2D diffuseTexture;
+Texture2D diffuseTexture : register(t0);
+Texture2D blendTexture: register(t1);
 
 cbuffer LightBuffer : register(b0)
 {
@@ -15,6 +16,20 @@ cbuffer PointLightBuffer : register(b1)
 	float radius;
 };
 
+cbuffer SpotLightBuffer : register(b2)
+{
+	float ConeRatio;
+	float3 m_padding;
+
+	float3 LightPosForSpotLight;
+	float m_padding2;
+
+	float3 ConeDirection;
+	float m_padding3;
+
+	float4 SpotLightColor;
+}
+
 struct PS_IN
 {
 	float4 posH : SV_POSITION;
@@ -27,16 +42,27 @@ struct PS_IN
 
 float4 main(PS_IN input) : SV_TARGET
 {
-	float4 textureColor;
-	float3 lightDir, lightDirForPointLight;
-	float lightIntensity, lightRatioForPointLight, Attenuation;
-	float4 color, color1;
+	float4 textureColor, combineTwoTextures, finalTextures;
+	float3 lightDir, lightDirForPointLight, lightDirForSpotLight;
+	float lightIntensity, lightRatioForPointLight, Attenuation, SpotLightRatio, SpotLightSurfaceRatio, SpotFactor;
+	float4 color, color1, color2;
 	float4 blendColorTogether;
 
 
 	//Sample the pixel color from the texture using the sampler at this texture coordinate location.
 	textureColor = diffuseTexture.Sample(SampleType, input.tex);
 
+	combineTwoTextures = blendTexture.Sample(SampleType, input.tex);
+	if (combineTwoTextures.x == 0.0f  && combineTwoTextures.y == 0.0f && combineTwoTextures.z == 0.0f )
+	{
+		finalTextures = textureColor;
+	}
+	else
+	{
+		finalTextures = textureColor * combineTwoTextures;
+	}
+
+	//finalTextures.a = 1;
 	//dot product btw normal vector & the light dir
 	lightDir = -lightDirection;
 
@@ -56,14 +82,27 @@ float4 main(PS_IN input) : SV_TARGET
 
 	color1 *= Attenuation;
 
+	//spotlight cal
+
+	lightDirForSpotLight = normalize(LightPosForSpotLight - input.posW);
+
+	SpotLightSurfaceRatio = saturate(dot(-lightDirForSpotLight, ConeDirection));
+
+	SpotFactor = (SpotLightSurfaceRatio > ConeRatio) ? 1 : 0;
+
+	SpotLightRatio = saturate(dot(lightDirForSpotLight, input.normal));
+
+	color2 = SpotLightRatio * SpotLightColor * SpotFactor;
+	
+	
 	//diffuse color combined with light intensity
 	color = saturate(diffuseColor * lightIntensity);
 
 	//multiply the texture pixel and the final diffuse color
 	//color = color * textureColor;
 
-	blendColorTogether = color + color1;
+	blendColorTogether = color + color1 + color2;
 	blendColorTogether = saturate(blendColorTogether);
 
-	return  blendColorTogether * textureColor;
+	return  blendColorTogether * finalTextures;
 }

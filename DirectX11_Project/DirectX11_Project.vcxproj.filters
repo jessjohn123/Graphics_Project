@@ -61,6 +61,15 @@
     <FxCompile Include="Trivial_PS_For_Skybox.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="Trivial_GS.hlsl">
+      <Filter>Resource Files</Filter>
+    </FxCompile>
+    <FxCompile Include="Trivial_VS_ForGeometry.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="Trivial_PS_ForGeometry.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="OgreTextures\SkinColorMostro_COLOR.png">
@@ -68,6 +77,12 @@
     </Image>
     <Image Include="Textures\DSC_4439.jpg">
       <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Textures\brickwall.jpg">
+      <Filter>Source Files</Filter>
+    </Image>
+    <Image Include="Textures\brickwall.dds">
+      <Filter>Source Files</Filter>
     </Image>
   </ItemGroup>
 </Project>

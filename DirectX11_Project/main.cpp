@@ -12,6 +12,9 @@
 #include "Trivial_PS.csh"
 #include "Trivial_PS_Texture.csh"
 #include "Trivial_PS_For_Skybox.csh"
+#include "Trivial_GS.csh"
+#include "Trivial_VS_ForGeometry.csh"
+#include "Trivial_PS_ForGeometry.csh"
 #include "LoadModel.h"
 #include "DDSTextureLoader.h"
 
@@ -71,6 +74,26 @@ class D3D_DEMO
 		float m_radius;
 	};
 
+	struct SPOT_LIGHT_VERTEX
+	{
+		float ratio;
+		XMFLOAT3 padding;
+
+		XMFLOAT3 lightPosition;
+		float padding2;
+
+		XMFLOAT3 lightDirection;
+		float padding3;
+
+		XMFLOAT4 diffuseColor;
+	};
+
+	struct GEO_VERTEX
+	{
+		XMFLOAT4 m_position;
+		XMFLOAT4 m_color;
+	};
+
 	IDXGISwapChain* m_SwapChain;
 	ID3D11Device *m_device;
 	ID3D11DeviceContext* m_deviceContext;
@@ -84,13 +107,18 @@ class D3D_DEMO
 	ID3D11Buffer* m_cBuffer[2];
 	ID3D11Buffer* m_cBufferForLight;
 	ID3D11Buffer* m_cBufferForPointLight;
+	ID3D11Buffer* m_cBufferForSpotLight;
 	ID3D11Buffer* m_iBuffer;
 	ID3D11Texture2D* z_buffer;
 	ID3D11VertexShader* m_vertexShader;
+	ID3D11VertexShader* m_vertexShaderForGeometry;
+	ID3D11PixelShader* m_pixelShaderForGeometry;
 	ID3D11PixelShader* m_pixelShader;
 	ID3D11PixelShader* m_pixelShaderForTexture;
 	ID3D11PixelShader* m_pixelShaderForSkybox;
+	ID3D11GeometryShader* m_geometryShader;
 	ID3D11InputLayout* m_layout;
+	ID3D11InputLayout* m_layoutForGeometryShader;
 	D3D11_VIEWPORT m_viewport;
 	D3D_FEATURE_LEVEL m_featureLevel;
 	unsigned int num_of_vertices;
@@ -114,13 +142,20 @@ class D3D_DEMO
 	ID3D11ShaderResourceView *m_textureView;
 	ID3D11ShaderResourceView *m_PlaneShaderView;
 	ID3D11ShaderResourceView *m_SkyBoxShaderView;
+	ID3D11ShaderResourceView *m_NullShaderView = NULL;
+	ID3D11Texture2D *m_secondTexture;
+	ID3D11ShaderResourceView *m_SecondPlaneShaderView;
 	ID3D11SamplerState *m_sampleTexture;
 	XMMATRIX skyboxWorld;
 	ID3D11Buffer *m_lightBuffer;
 	ID3D11Buffer * m_PointLightBuffer;
+	ID3D11Buffer * m_SpotLightBuffer;
 	LIGHT_VERTEX m_light;
 	POINT_LIGHT_VERTEX m_pointLight;
-
+	SPOT_LIGHT_VERTEX m_spotLight;
+	SIMPLE_VERTEX m_ForQuad;
+	ID3D11Buffer *m_vertexBufferForGeometry;
+	GEO_VERTEX m_geoVertex;
 
 	unsigned int indices[60] = { 0,1,10,1,2,10,2,3,10,3,4,10,4,5,10,5,6,10,6,7,10,7,8,10,8,9,10,9,0,10,
 		0,9,11,9,8,11,8,7,11,7,6,11,6,5,11,5,4,11,4,3,11,3,2,11,2,1,11,1,0,11 };
@@ -170,13 +205,21 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	D3D11_RASTERIZER_DESC m_RasterDesc = {};
 	D3D11_TEXTURE2D_DESC textureDesc;
 	D3D11_SHADER_RESOURCE_VIEW_DESC texViewDesc;
+	D3D11_TEXTURE2D_DESC secondTextureDesc;
+	D3D11_SHADER_RESOURCE_VIEW_DESC secondTexViewDesc;
+	
 	D3D11_SAMPLER_DESC m_texture;
 	D3D11_BUFFER_DESC lightBufferDesc = {};
 	D3D11_BUFFER_DESC point_lightBufferDesc = {};
+	D3D11_BUFFER_DESC spotLightBufferDesc = {};
 	D3D11_BUFFER_DESC m_constantBufferForLight = {};
 	D3D11_SUBRESOURCE_DATA m_constantDataForLight = {};
 	D3D11_BUFFER_DESC m_constantBufferForPointLight = {};
 	D3D11_SUBRESOURCE_DATA m_constantDataForPointLight = {};
+	D3D11_BUFFER_DESC m_constantBufferForSpotLight = {};
+	D3D11_SUBRESOURCE_DATA m_constantDataForSpotLight = {};
+	D3D11_BUFFER_DESC m_vertexBufferDescForGeometry = {};
+	D3D11_SUBRESOURCE_DATA m_vertexDataForGeometry = {};
 
 	swapChainDesc.BufferDesc.Width = BACKBUFFER_WIDTH;
 	swapChainDesc.BufferDesc.Height = BACKBUFFER_HEIGHT;
@@ -486,9 +529,12 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateBuffer(&m_vertexBuffer, &m_vertexData, &m_matrixBuffer);
 
 	m_device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), NULL, &m_vertexShader);
+	m_device->CreateVertexShader(Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), NULL, &m_vertexShaderForGeometry);
 	m_device->CreatePixelShader(Trivial_PS, sizeof(Trivial_PS), NULL, &m_pixelShader);
 	m_device->CreatePixelShader(Trivial_PS_Texture, sizeof(Trivial_PS_Texture), NULL, &m_pixelShaderForTexture);
 	m_device->CreatePixelShader(Trivial_PS_For_Skybox, sizeof(Trivial_PS_For_Skybox), NULL, &m_pixelShaderForSkybox);
+	m_device->CreatePixelShader(Trivial_PS_ForGeometry, sizeof(Trivial_PS_ForGeometry), NULL, &m_pixelShaderForGeometry);
+	m_device->CreateGeometryShader(Trivial_GS, sizeof(Trivial_GS),NULL, &m_geometryShader);
 
 	D3D11_INPUT_ELEMENT_DESC m_inputLayout[] =
 	{
@@ -500,6 +546,14 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateInputLayout(m_inputLayout, ARRAYSIZE(m_inputLayout), Trivial_VS, sizeof(Trivial_VS), &m_layout);
 
+	D3D11_INPUT_ELEMENT_DESC m_inputLayoutForGS[] = 
+	{
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+	};
+
+	m_device->CreateInputLayout(m_inputLayoutForGS, ARRAYSIZE(m_inputLayoutForGS), Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), &m_layoutForGeometryShader);
+	
 	//setting up the desc of the constant buffer
 	m_constantBuffer.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	m_constantBuffer.Usage = D3D11_USAGE_DYNAMIC;
@@ -514,7 +568,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateBuffer(&m_constantBuffer, &m_constantData, &m_cBuffer[1]);
 
 	//Directional Light
-	m_light.diffuseColor = { 1,1,1,1 };
+	m_light.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
 	m_light.lightDirection = { -1.0f,-0.5f,0.0f };
 	//setting up the desc of the constant buffer light
 	m_constantBufferForLight.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -527,7 +581,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateBuffer(&m_constantBufferForLight, &m_constantDataForLight, &m_cBufferForLight);
 
 	//PointLight
-	m_pointLight.diffuseColor = { 1,1,1,1 };
+	m_pointLight.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
 	m_pointLight.lightPos = {0.0f, 1.0f, 0.0f};
 	m_pointLight.m_radius = 10.0f;
 	//setting up the desc of the constant buffer for point light
@@ -540,6 +594,26 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_constantDataForPointLight.pSysMem = &m_pointLight;
 	m_device->CreateBuffer(&m_constantBufferForPointLight, &m_constantDataForPointLight, &m_cBufferForPointLight);
 
+	//SpotLight
+	//m_spotLight.diffuseColor = { 1.0f,.4f,.4f,.4f };
+	m_spotLight.diffuseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	m_spotLight.lightPosition = { 0.0f, 1.0f, 0.0f };
+	m_spotLight.lightDirection = { 0.0f, -1.0f, 0.0f };
+	m_spotLight.ratio = 0.9f;
+
+	//setting up the desc of the constant buffer for spot light
+	m_constantBufferForSpotLight.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	m_constantBufferForSpotLight.Usage = D3D11_USAGE_DYNAMIC;
+	m_constantBufferForSpotLight.ByteWidth = sizeof(SPOT_LIGHT_VERTEX);
+	m_constantBufferForSpotLight.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	
+
+
+
+	//setting up the desc for constant light data
+	m_constantDataForSpotLight.pSysMem = &m_spotLight;
+	m_device->CreateBuffer(&m_constantBufferForSpotLight, &m_constantDataForSpotLight, &m_cBufferForSpotLight);
+
 	//setting up the view and projection
 	temp.projection = XMMatrixIdentity();
 	temp.view = XMMatrixIdentity();
@@ -550,7 +624,6 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	//setting up the projection for rendering 3D model
 	temp.projection = XMMatrixPerspectiveFovLH(XMConvertToRadians(90), ASPECTRATIO, SCREEN_NEAR, SCREEN_DEPTH);
-
 
 	//setting up the desc of the index buffer
 	m_indexBuffer.Usage = D3D11_USAGE_IMMUTABLE;
@@ -571,7 +644,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateBuffer(&lightBufferDesc, NULL, &m_lightBuffer);
 
-	//setting up the desc of the light dynamic constant buffer
+	//setting up the desc of the light dynamic constant buffer ->pointLight
 	point_lightBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
 	point_lightBufferDesc.ByteWidth = sizeof(m_pointLight);
 	point_lightBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -581,6 +654,41 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateBuffer(&point_lightBufferDesc, NULL, &m_PointLightBuffer);
 
+	//setting up the desc of the light dynamic constant buffer -> spotpointlight 
+	spotLightBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	spotLightBufferDesc.ByteWidth = sizeof(m_spotLight);
+	spotLightBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	spotLightBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	spotLightBufferDesc.MiscFlags = 0;
+	spotLightBufferDesc.StructureByteStride = 0;
+
+	m_device->CreateBuffer(&spotLightBufferDesc, NULL, &m_SpotLightBuffer);
+
+	//setting up the
+	m_geoVertex.m_position = { -6,0,0,1 };
+	m_geoVertex.m_color = { 1,0,0,1 };
+	GEO_VERTEX m_quadPos[3];
+	m_quadPos[0] = m_geoVertex;
+
+	m_geoVertex.m_position = { 6,0,0,1 };
+	m_geoVertex.m_color = { 1,0,0,1 };
+	m_quadPos[1] = m_geoVertex;
+
+	m_geoVertex.m_position = { -6,0,-25,1 };
+	m_geoVertex.m_color = { 1,0,0,1 };
+	m_quadPos[2] = m_geoVertex;
+
+	//setting up vertex buffer for the geometry shader
+	m_vertexBufferDescForGeometry.Usage = D3D11_USAGE_IMMUTABLE;
+	m_vertexBufferDescForGeometry.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	m_vertexBufferDescForGeometry.CPUAccessFlags = NULL;
+	m_vertexBufferDescForGeometry.ByteWidth = sizeof(GEO_VERTEX)*3;
+
+	m_vertexDataForGeometry.pSysMem = m_quadPos;	
+
+	m_device->CreateBuffer(&m_vertexBufferDescForGeometry, &m_vertexDataForGeometry, &m_vertexBufferForGeometry);
+
+	//texture2d setup
 	m_texture2D.Width = BACKBUFFER_WIDTH;
 	m_texture2D.Height = BACKBUFFER_HEIGHT;
 	m_texture2D.Usage = D3D11_USAGE_DEFAULT;
@@ -590,6 +698,24 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_texture2D.ArraySize = 1;
 	m_texture2D.SampleDesc.Count = 1;
 	m_device->CreateTexture2D(&m_texture2D, NULL, &z_buffer);
+
+	//second texture2d setup
+	ZeroMemory(&secondTextureDesc, sizeof(secondTextureDesc));
+	secondTextureDesc.Width = BACKBUFFER_WIDTH;
+	secondTextureDesc.Height = BACKBUFFER_HEIGHT;
+	secondTextureDesc.Usage = D3D11_USAGE_DEFAULT;
+	secondTextureDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	secondTextureDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	secondTextureDesc.MipLevels = 1;
+	secondTextureDesc.ArraySize = 1;
+	secondTextureDesc.SampleDesc.Count = 1;
+	secondTextureDesc.CPUAccessFlags = 0;
+	secondTextureDesc.MiscFlags = 0;
+	m_device->CreateTexture2D(&secondTextureDesc, NULL, &m_secondTexture);
+
+	//for setting up the quad
+	m_ForQuad.position = XMFLOAT4(0.0f, 0.5f, 0.0f, 1.0f);
+	m_ForQuad.color = XMFLOAT4(1.0f, 0.0f, 0.0f, 0.0f);
 
 	d_stencil.Format = DXGI_FORMAT_D32_FLOAT;
 	d_stencil.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
@@ -612,11 +738,11 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	//passing info inside the dds texture loader
 	CreateDDSTextureFromFile(m_device, L"OgreTextures/SkinColorMostro_COLOR.dds", NULL, &m_textureView);
-
+	//CreateDDSTextureFromFile(m_device, NULL, NULL, &m_NullShaderView);
 	//passing info inside the dds texture loader for plane
 	//CreateDDSTextureFromFile(m_device, L"Textures/checkerboard.dds", NULL, &m_PlaneShaderView);
 	CreateDDSTextureFromFile(m_device, L"Textures/DSC_4439.dds", NULL, &m_PlaneShaderView);
-
+	CreateDDSTextureFromFile(m_device, L"Textures/brickwall.dds", NULL, &m_SecondPlaneShaderView);
 	//setting up desc for skybox
 	CreateDDSTextureFromFile(m_device, L"mp_rip/OutputCube.dds", NULL, &m_SkyBoxShaderView);
 
@@ -641,11 +767,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_texture.MinLOD = 0;
 	m_texture.MipLODBias = 0;
 
-
 	m_device->CreateSamplerState(&m_texture, &m_sampleTexture);
-
-
-
 }
 
 bool D3D_DEMO::Run()
@@ -658,44 +780,44 @@ bool D3D_DEMO::Run()
 
 	if (GetAsyncKeyState('W') & 0x1)
 	{
-		temp.view.r[3].m128_f32[2] += 0.005f;	
+		temp.view.r[3].m128_f32[2] += 0.05f;	
 	}
 
 	if (GetAsyncKeyState('S') & 0x1)
 	{
-		temp.view.r[3].m128_f32[2] -= 0.005f;
+		temp.view.r[3].m128_f32[2] -= 0.05f;
 		//m_light.lightDirection.z -= 0.02f
 	}
 
 	if (GetAsyncKeyState('A') & 0x1)
 	{
-		temp.view.r[3].m128_f32[0] -= 0.005f;
+		temp.view.r[3].m128_f32[0] -= 0.05f;
 	}
 
 	if (GetAsyncKeyState('D') & 0x1)
 	{
-		temp.view.r[3].m128_f32[0] += 0.005f;
+		temp.view.r[3].m128_f32[0] += 0.05f;
 	}
 
 	if (GetAsyncKeyState(VK_UP) & 0x1)
 	{
-		temp.view.r[3].m128_f32[1] += 0.005f;
+		temp.view.r[3].m128_f32[1] += 0.05f;
 	}
 
 	if (GetAsyncKeyState(VK_DOWN) & 0x1)
 	{
-		temp.view.r[3].m128_f32[1] -= 0.005f;
+		temp.view.r[3].m128_f32[1] -= 0.05f;
 	}
 
 	//setting up the camera rotation
 	if (GetAsyncKeyState(VK_NUMPAD6) & 0x1)
 	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationY(0.005f), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationY(0.05f), temp.view);
 	}
 
 	if (GetAsyncKeyState(VK_NUMPAD4) & 0x1)
 	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.005f), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.05f), temp.view);
 	}
 
 	if (GetAsyncKeyState('I') & 0x1)
@@ -718,7 +840,7 @@ bool D3D_DEMO::Run()
 		//m_light.diffuseColor.x += 0.10f;
 		m_light.lightDirection.x += 0.10f;
 	}
-
+	//movement code for pointlight
 	if(GetAsyncKeyState('F') & 0x1)
 	{
 		//m_light.diffuseColor.z += 0.10f;
@@ -739,6 +861,28 @@ bool D3D_DEMO::Run()
 		//m_light.diffuseColor.x += 0.10f;
 		m_pointLight.lightPos.x += 0.10f;
 	}
+
+	//movement code for spotlight
+	if (GetAsyncKeyState('Y') & 0x1)
+	{
+		m_spotLight.lightPosition.z += 0.10f;
+	}
+
+	if (GetAsyncKeyState('H') & 0x1)
+	{
+		m_spotLight.lightPosition.z -= 0.10f;
+	}
+
+	if (GetAsyncKeyState('T') & 0x1)
+	{
+		m_spotLight.lightPosition.x -= 0.10f;
+	}
+
+	if (GetAsyncKeyState('U') & 0x1)
+	{
+		m_spotLight.lightPosition.x += 0.10f;
+	}
+
 	vec3.x = temp.view.r[3].m128_f32[0];
 	vec3.y = temp.view.r[3].m128_f32[1];
 	vec3.z = temp.view.r[3].m128_f32[2];
@@ -803,6 +947,12 @@ bool D3D_DEMO::Run()
 	*m_PointLight = m_pointLight;
 	m_deviceContext->Unmap(m_cBufferForPointLight, 0);
 
+	D3D11_MAPPED_SUBRESOURCE m_mapSourceForSpotLight;
+	m_deviceContext->Map(m_cBufferForSpotLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForSpotLight);
+	SPOT_LIGHT_VERTEX *m_SpotLight = ((SPOT_LIGHT_VERTEX*)m_mapSourceForSpotLight.pData);
+	*m_SpotLight = m_spotLight;
+	m_deviceContext->Unmap(m_cBufferForSpotLight, 0);
+
 	unsigned int stride = sizeof(SIMPLE_VERTEX);
 	unsigned int offsets = 0;
 
@@ -828,49 +978,94 @@ bool D3D_DEMO::Run()
 	*m_temp = toObject;
 	m_deviceContext->Unmap(m_cBuffer[0], 0);
 
+
 	//star
 	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
 	m_deviceContext->IASetVertexBuffers(0, 1, &m_matrixBuffer, &stride, &offsets);
 	m_deviceContext->PSSetShader(m_pixelShader, NULL, NULL);
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
 	m_deviceContext->IASetIndexBuffer(m_iBuffer, DXGI_FORMAT_R32_UINT, 0);
 	m_deviceContext->DrawIndexed(60, 0, 0);
+	
+	//drawing for the quad through geometry shader
+	stride = sizeof(GEO_VERTEX);
+	m_deviceContext->VSSetShader(m_vertexShaderForGeometry, NULL, NULL);
+	m_deviceContext->PSSetShader(m_pixelShaderForGeometry, NULL, NULL);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_vertexBufferForGeometry, &stride, &offsets);
+	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+	m_deviceContext->IASetInputLayout(m_layoutForGeometryShader);
+	m_deviceContext->GSSetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
+	m_deviceContext->Draw(3,0);
+
+	//directional toggle
 	if (GetAsyncKeyState('2') & 0x1)
 	{
-		m_light.diffuseColor = { 1,1,1,1 };
+		m_light.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
 	}
 	if (GetAsyncKeyState('1') & 0x1)
 	{
-		m_light.diffuseColor = { 0,1,0,0 };
+		m_light.diffuseColor = { 0.4f,1.0f,0.4f,0.4f};
 	}
-
+	
+	//pointlight toggle
 	if (GetAsyncKeyState('3') & 0x1)
 	{
-		m_pointLight.diffuseColor = { 0,0,1,0 };
+		m_pointLight.diffuseColor = { 0.4f,0.4f,1.0f,0.4f};
 	}
 
 	if (GetAsyncKeyState('4') & 0x1)
 	{
-		m_pointLight.diffuseColor = { 1,1,1,1 };
+		m_pointLight.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
+	}
+
+	//spotlight toggle
+	if (GetAsyncKeyState('5') & 0x1)
+	{
+		m_spotLight.diffuseColor = { 1.0f,0.4f,0.4f,0.4f };
+	}
+	if (GetAsyncKeyState('6') & 0x1)
+	{
+		m_spotLight.diffuseColor = { 1.0, 1.0f, 1.0f, 1.0f };
 	}
 
 	m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
 	m_deviceContext->PSSetConstantBuffers(1, 1, &m_cBufferForPointLight);
+	m_deviceContext->PSSetConstantBuffers(2, 1, &m_cBufferForSpotLight);
 
-	//plane
-	m_deviceContext->VSGetConstantBuffers(0, 2, m_cBuffer);
-	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
-	m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
-	m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-	m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
-	m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
+	////plane
+	//m_deviceContext->VSGetConstantBuffers(0, 2, m_cBuffer);
+	//m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
+	//m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
+	//m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	//m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
+	//m_deviceContext->PSSetShaderResources(1, 1, &m_SecondPlaneShaderView);
+	//m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
+	//m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
 
 
 	//Ogre_model
+	stride = sizeof(SIMPLE_VERTEX);
+	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_deviceContext->IASetInputLayout(m_layout);
+	m_deviceContext->VSSetShader(m_vertexShader, NULL, NULL);
 	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
 	m_deviceContext->IASetIndexBuffer(m_modelIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	m_deviceContext->IASetVertexBuffers(0, 1, &m_modelVertexBuffer, &stride, &offsets);
 	m_deviceContext->PSSetShaderResources(0, 1, &m_textureView);
 	m_deviceContext->DrawIndexed(modelSize, 0, 0);
+
+	// plane
+	m_deviceContext->VSGetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
+	m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
+	m_deviceContext->PSSetShaderResources(1, 1, &m_SecondPlaneShaderView);
+	m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
+	m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
 
 	toObject.worldMatrix = skyboxWorld;
 
@@ -887,8 +1082,12 @@ bool D3D_DEMO::ShutDown()
 
 	m_cBuffer[0]->Release();
 	m_cBuffer[1]->Release();
+	m_cBufferForLight->Release();
+	m_cBufferForPointLight->Release();
+	m_cBufferForSpotLight->Release();
 	m_iBuffer->Release();
 	z_buffer->Release();
+	m_matrixBuffer->Release();
 	m_depthStencilView->Release();
 
 	UnregisterClass(L"DirectXApplication", application);
