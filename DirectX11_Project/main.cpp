@@ -156,6 +156,7 @@ class D3D_DEMO
 	SIMPLE_VERTEX m_ForQuad;
 	ID3D11Buffer *m_vertexBufferForGeometry;
 	GEO_VERTEX m_geoVertex;
+	ID3D11Debug*  DebugDevice;
 
 	unsigned int indices[60] = { 0,1,10,1,2,10,2,3,10,3,4,10,4,5,10,5,6,10,6,7,10,7,8,10,8,9,10,9,0,10,
 		0,9,11,9,8,11,8,7,11,7,6,11,6,5,11,5,4,11,4,3,11,3,2,11,2,1,11,1,0,11 };
@@ -163,6 +164,7 @@ class D3D_DEMO
 public:
 	D3D_DEMO(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
+	void ReportLiveObjects();
 	bool ShutDown();
 };
 
@@ -780,44 +782,44 @@ bool D3D_DEMO::Run()
 
 	if (GetAsyncKeyState('W') & 0x1)
 	{
-		temp.view.r[3].m128_f32[2] += 0.05f;	
+		temp.view.r[3].m128_f32[2] += 0.02f;	
 	}
 
 	if (GetAsyncKeyState('S') & 0x1)
 	{
-		temp.view.r[3].m128_f32[2] -= 0.05f;
+		temp.view.r[3].m128_f32[2] -= 0.02f;
 		//m_light.lightDirection.z -= 0.02f
 	}
 
 	if (GetAsyncKeyState('A') & 0x1)
 	{
-		temp.view.r[3].m128_f32[0] -= 0.05f;
+		temp.view.r[3].m128_f32[0] -= 0.02f;
 	}
 
 	if (GetAsyncKeyState('D') & 0x1)
 	{
-		temp.view.r[3].m128_f32[0] += 0.05f;
+		temp.view.r[3].m128_f32[0] += 0.02f;
 	}
 
 	if (GetAsyncKeyState(VK_UP) & 0x1)
 	{
-		temp.view.r[3].m128_f32[1] += 0.05f;
+		temp.view.r[3].m128_f32[1] += 0.02f;
 	}
 
 	if (GetAsyncKeyState(VK_DOWN) & 0x1)
 	{
-		temp.view.r[3].m128_f32[1] -= 0.05f;
+		temp.view.r[3].m128_f32[1] -= 0.02f;
 	}
 
 	//setting up the camera rotation
 	if (GetAsyncKeyState(VK_NUMPAD6) & 0x1)
 	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationY(0.05f), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationY(0.02f), temp.view);
 	}
 
 	if (GetAsyncKeyState(VK_NUMPAD4) & 0x1)
 	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.05f), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.02f), temp.view);
 	}
 
 	if (GetAsyncKeyState('I') & 0x1)
@@ -1074,12 +1076,28 @@ bool D3D_DEMO::Run()
 	return true;
 }
 
+void D3D_DEMO::ReportLiveObjects()
+{
+	#ifdef _DEBUG
+	HRESULT result = m_device->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast <void**>(&DebugDevice));
+	//CHECKERROR
+	result = DebugDevice->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+	//CHECKERROR
+	#endif 
+}
+
 bool D3D_DEMO::ShutDown()
 {
 	m_device->Release();
 	m_SwapChain->Release();
 	m_deviceContext->Release();
-
+	m_renderTargetView->Release();
+//	m_depthStencilBuffer->Release();
+	m_depthStencilView->Release();
+//	m_depthStencilState->Release();
+	m_rasterState->Release();
+	m_rasterForSkybox->Release();
+	m_matrixBuffer->Release();
 	m_cBuffer[0]->Release();
 	m_cBuffer[1]->Release();
 	m_cBufferForLight->Release();
@@ -1087,9 +1105,41 @@ bool D3D_DEMO::ShutDown()
 	m_cBufferForSpotLight->Release();
 	m_iBuffer->Release();
 	z_buffer->Release();
-	m_matrixBuffer->Release();
-	m_depthStencilView->Release();
+	m_vertexShader->Release();
+	m_vertexShaderForGeometry->Release();
+	m_pixelShader->Release();
+	m_pixelShaderForGeometry->Release();
+	m_pixelShaderForTexture->Release();
+	m_pixelShaderForSkybox->Release();
+	m_geometryShader->Release();
+	m_layout->Release();
+	m_layoutForGeometryShader->Release();
+	m_modelVertexBuffer->Release();
+	m_modelIndexBuffer->Release();
+	m_planeVertexBuffer->Release();
+	m_planeIndexBuffer->Release();
+	m_skyboxVertexBuffer->Release();
+	m_skyboxIndexBuffer->Release();
+//	m_texture->Release();
+	m_textureView->Release();
+	m_PlaneShaderView->Release();
+	m_SkyBoxShaderView->Release();
+//	m_NullShaderView->Release();
+	m_secondTexture->Release();
+	m_SecondPlaneShaderView->Release();
+	m_sampleTexture->Release();
+	m_lightBuffer->Release();
+	m_PointLightBuffer->Release();
+	m_SpotLightBuffer->Release();
+	m_vertexBufferForGeometry->Release();
+	delete m_model;
+	delete vert_indices, text_indices, norm_indices;
+	delete m_skyModel;
+	delete m_vert, m_text, m_norm;
+	delete m_planeModel;
+	delete m_vertForPlane, m_textForPlane, m_normForPlane;
 
+//	DebugDevice->Release();
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }
