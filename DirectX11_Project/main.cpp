@@ -157,6 +157,7 @@ class D3D_DEMO
 	ID3D11Buffer *m_vertexBufferForGeometry;
 	GEO_VERTEX m_geoVertex;
 	ID3D11Debug*  DebugDevice;
+	ID3D11Texture2D* ptrToBackBuffer;
 
 	unsigned int indices[60] = { 0,1,10,1,2,10,2,3,10,3,4,10,4,5,10,5,6,10,6,7,10,7,8,10,8,9,10,9,0,10,
 		0,9,11,9,8,11,8,7,11,7,6,11,6,5,11,5,4,11,4,3,11,3,2,11,2,1,11,1,0,11 };
@@ -195,7 +196,6 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	DXGI_SWAP_CHAIN_DESC swapChainDesc;
 	DXGI_RATIONAL m_rational;
-	ID3D11Texture2D* ptrToBackBuffer;
 	D3D11_BUFFER_DESC m_vertexBuffer = {};
 	D3D11_SUBRESOURCE_DATA m_vertexData = {};
 	D3D11_BUFFER_DESC m_constantBuffer = {};
@@ -929,30 +929,35 @@ bool D3D_DEMO::Run()
 	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
 	SEND_TO_OBJECT *m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
 	*m_temp = toObject;
+	//memcpy(m_mapSource.pData, &toObject, sizeof(&toObject));
 	m_deviceContext->Unmap(m_cBuffer[0], 0);
 
 	D3D11_MAPPED_SUBRESOURCE m_mapSource2;
 	m_deviceContext->Map(m_cBuffer[1], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource2);
 	SEND_TO_SCENE *temp2 = ((SEND_TO_SCENE*)m_mapSource2.pData);
 	*temp2 = toScene;
+	//memcpy(m_mapSource2.pData, &toScene, sizeof(&toScene));
 	m_deviceContext->Unmap(m_cBuffer[1], 0);
 
 	D3D11_MAPPED_SUBRESOURCE m_mapSourceForLight;
 	m_deviceContext->Map(m_cBufferForLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForLight);
 	LIGHT_VERTEX *m_Light = ((LIGHT_VERTEX*)m_mapSourceForLight.pData);
 	*m_Light = m_light;
+	//memcpy(m_mapSourceForLight.pData, &m_light, sizeof(&m_light));
 	m_deviceContext->Unmap(m_cBufferForLight, 0);
 
 	D3D11_MAPPED_SUBRESOURCE m_mapSourceForPointLight;
 	m_deviceContext->Map(m_cBufferForPointLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForPointLight);
 	POINT_LIGHT_VERTEX *m_PointLight = ((POINT_LIGHT_VERTEX*)m_mapSourceForPointLight.pData);
 	*m_PointLight = m_pointLight;
+	//memcpy(m_mapSourceForPointLight.pData, &m_pointLight, sizeof(&m_pointLight));
 	m_deviceContext->Unmap(m_cBufferForPointLight, 0);
 
 	D3D11_MAPPED_SUBRESOURCE m_mapSourceForSpotLight;
 	m_deviceContext->Map(m_cBufferForSpotLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForSpotLight);
 	SPOT_LIGHT_VERTEX *m_SpotLight = ((SPOT_LIGHT_VERTEX*)m_mapSourceForSpotLight.pData);
 	*m_SpotLight = m_spotLight;
+	//memcpy(m_mapSourceForSpotLight.pData, &m_spotLight, sizeof(&m_spotLight));
 	m_deviceContext->Unmap(m_cBufferForSpotLight, 0);
 
 	unsigned int stride = sizeof(SIMPLE_VERTEX);
@@ -1059,7 +1064,7 @@ bool D3D_DEMO::Run()
 	m_deviceContext->DrawIndexed(modelSize, 0, 0);
 
 	// plane
-	m_deviceContext->VSGetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
 	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
 	m_deviceContext->GSSetShader(NULL, NULL, NULL);
 	m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
@@ -1073,6 +1078,7 @@ bool D3D_DEMO::Run()
 
 	m_SwapChain->Present(0, 0);
 
+//	ReportLiveObjects();
 	return true;
 }
 
@@ -1083,18 +1089,19 @@ void D3D_DEMO::ReportLiveObjects()
 	//CHECKERROR
 	result = DebugDevice->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
 	//CHECKERROR
+	DebugDevice->Release();
 	#endif 
 }
 
 bool D3D_DEMO::ShutDown()
 {
-	m_device->Release();
+	
 	m_SwapChain->Release();
 	m_deviceContext->Release();
 	m_renderTargetView->Release();
-//	m_depthStencilBuffer->Release();
+
 	m_depthStencilView->Release();
-//	m_depthStencilState->Release();
+
 	m_rasterState->Release();
 	m_rasterForSkybox->Release();
 	m_matrixBuffer->Release();
@@ -1132,14 +1139,17 @@ bool D3D_DEMO::ShutDown()
 	m_PointLightBuffer->Release();
 	m_SpotLightBuffer->Release();
 	m_vertexBufferForGeometry->Release();
+	//ptrToBackBuffer
+	ptrToBackBuffer->Release();
 	delete m_model;
 	delete vert_indices, text_indices, norm_indices;
 	delete m_skyModel;
 	delete m_vert, m_text, m_norm;
 	delete m_planeModel;
 	delete m_vertForPlane, m_textForPlane, m_normForPlane;
-
-//	DebugDevice->Release();
+	ReportLiveObjects();
+	m_device->Release();
+	
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }
