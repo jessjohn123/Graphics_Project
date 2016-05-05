@@ -66,17 +66,17 @@ bool LoadMesh::LoadObj(const char * path, std::vector<float3>& v_ForModel, std::
 					>> v_temp.y >> input2 >> t_temp.y >> input2 >> n_temp.y
 					>> v_temp.z >> input2 >> t_temp.z >> input2 >> n_temp.z;
 
-				v_indices.push_back(v_temp.x-1);
-				v_indices.push_back(v_temp.y-1);
-				v_indices.push_back(v_temp.z-1);
+				v_indices.push_back(v_temp.x-1.0f);
+				v_indices.push_back(v_temp.y-1.0f);
+				v_indices.push_back(v_temp.z-1.0f);
 
-				t_indices.push_back(t_temp.x-1);
-				t_indices.push_back(t_temp.y-1);
-				t_indices.push_back(t_temp.z-1);
+				t_indices.push_back(t_temp.x-1.0f);
+				t_indices.push_back(t_temp.y-1.0f);
+				t_indices.push_back(t_temp.z-1.0f);
 
-				n_indices.push_back(n_temp.x-1);
-				n_indices.push_back(n_temp.y-1);
-				n_indices.push_back(n_temp.z-1);	
+				n_indices.push_back(n_temp.x-1.0f);
+				n_indices.push_back(n_temp.y-1.0f);
+				n_indices.push_back(n_temp.z-1.0f);	
 			}
 		}
 

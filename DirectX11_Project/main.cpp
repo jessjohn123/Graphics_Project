@@ -15,6 +15,8 @@
 #include "Trivial_GS.csh"
 #include "Trivial_VS_ForGeometry.csh"
 #include "Trivial_PS_ForGeometry.csh"
+#include "Trivial_VS_ForNormalMapping.csh"
+#include "Trivial_PS_ForNormalMapping.csh"
 #include "LoadModel.h"
 #include "DDSTextureLoader.h"
 
@@ -50,6 +52,17 @@ class D3D_DEMO
 		XMFLOAT4 color;
 		XMFLOAT2 texture;
 		XMFLOAT3 normal;
+		XMFLOAT3 tangent;
+	};
+
+	struct SIMPLE_VERTEX_FOR_NORMAL_MAP
+	{
+		XMFLOAT4 position;
+		XMFLOAT4 color;
+		XMFLOAT2 texture;
+		XMFLOAT3 normal;
+		XMFLOAT3 tangent;
+		XMFLOAT3 binormal;
 	};
 	struct SEND_TO_OBJECT
 	{
@@ -108,17 +121,21 @@ class D3D_DEMO
 	ID3D11Buffer* m_cBufferForLight;
 	ID3D11Buffer* m_cBufferForPointLight;
 	ID3D11Buffer* m_cBufferForSpotLight;
+	//ID3D11Buffer* m_cBufferForNormalMap;								 // constant buffer normal map
 	ID3D11Buffer* m_iBuffer;
 	ID3D11Texture2D* z_buffer;
 	ID3D11VertexShader* m_vertexShader;
 	ID3D11VertexShader* m_vertexShaderForGeometry;
+	//ID3D11VertexShader* m_vertexShaderForNormalMap;						// normal map vertex shader
 	ID3D11PixelShader* m_pixelShaderForGeometry;
 	ID3D11PixelShader* m_pixelShader;
 	ID3D11PixelShader* m_pixelShaderForTexture;
 	ID3D11PixelShader* m_pixelShaderForSkybox;
+	//ID3D11PixelShader* m_pixelShaderForNormalMap;						//normal map pixel shader
 	ID3D11GeometryShader* m_geometryShader;
 	ID3D11InputLayout* m_layout;
 	ID3D11InputLayout* m_layoutForGeometryShader;
+	//ID3D11InputLayout* m_layoutForNormalMap;							//normal map input layer
 	D3D11_VIEWPORT m_viewport;
 	D3D_FEATURE_LEVEL m_featureLevel;
 	unsigned int num_of_vertices;
@@ -205,10 +222,10 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	D3D11_TEXTURE2D_DESC m_texture2D = {};
 	D3D11_DEPTH_STENCIL_VIEW_DESC d_stencil = {};
 	D3D11_RASTERIZER_DESC m_RasterDesc = {};
-	D3D11_TEXTURE2D_DESC textureDesc;
-	D3D11_SHADER_RESOURCE_VIEW_DESC texViewDesc;
+	//D3D11_TEXTURE2D_DESC textureDesc;
+	//D3D11_SHADER_RESOURCE_VIEW_DESC texViewDesc;
 	D3D11_TEXTURE2D_DESC secondTextureDesc;
-	D3D11_SHADER_RESOURCE_VIEW_DESC secondTexViewDesc;
+	//D3D11_SHADER_RESOURCE_VIEW_DESC secondTexViewDesc;
 	
 	D3D11_SAMPLER_DESC m_texture;
 	D3D11_BUFFER_DESC lightBufferDesc = {};
@@ -217,6 +234,8 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	D3D11_BUFFER_DESC m_constantBufferForLight = {};
 	D3D11_SUBRESOURCE_DATA m_constantDataForLight = {};
 	D3D11_BUFFER_DESC m_constantBufferForPointLight = {};
+	//D3D11_BUFFER_DESC m_constantBufferForDirLightForNM = {};
+	//D3D11_SUBRESOURCE_DATA m_constantDataForDirLightForNM = {};
 	D3D11_SUBRESOURCE_DATA m_constantDataForPointLight = {};
 	D3D11_BUFFER_DESC m_constantBufferForSpotLight = {};
 	D3D11_SUBRESOURCE_DATA m_constantDataForSpotLight = {};
@@ -331,6 +350,55 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 		m_model[j].normal.x = norm_vertices[norm_indices[j]].x;
 		m_model[j].normal.y = norm_vertices[norm_indices[j]].y;
 		m_model[j].normal.z = norm_vertices[norm_indices[j]].z;
+	}
+
+
+	// create tangents here
+
+	for (unsigned int j = 0; j < indicesForV.size(); j += 3)
+	{
+		// find the 3 verts that pertain to this triangle
+		SIMPLE_VERTEX v1 = m_model[j];
+		SIMPLE_VERTEX v2 = m_model[j+1];
+		SIMPLE_VERTEX v3 = m_model[j+2];
+
+		SIMPLE_VERTEX edge1, edge2;
+		edge1.position.x = v2.position.x - v1.position.x;
+		edge1.position.y = v2.position.y - v1.position.y;
+		edge1.position.z = v2.position.z - v1.position.z;
+
+		edge2.position.x = v3.position.x - v2.position.x;
+		edge2.position.y = v3.position.y - v2.position.y;
+		edge2.position.z = v3.position.z - v2.position.z;
+
+		SIMPLE_VERTEX t1 = m_model[j];
+		SIMPLE_VERTEX t2 = m_model[j+1];
+
+		SIMPLE_VERTEX TexEdge1, TexEdge2;
+		TexEdge1.texture.x = t2.texture.x - t1.texture.x;
+		TexEdge1.texture.y = t2.texture.y - t1.texture.y;
+
+		TexEdge2.texture.x = t2.texture.x - t1.texture.x;
+		TexEdge2.texture.y = t2.texture.y - t1.texture.y;
+		// do the fancy math in the powerpoint slides
+		float ratio;
+		XMVECTOR dotResult, Tangent;
+		ratio = 1.0f / (TexEdge1.position.x * TexEdge2.position.y - TexEdge2.position.x * TexEdge1.position.y);
+
+		XMFLOAT3 uDirection, vDirection;
+		uDirection = XMFLOAT3(((TexEdge2.position.y * edge1.position.x - TexEdge1.position.y * edge2.position.x) * ratio),
+							  ((TexEdge2.position.y * edge1.position.y - TexEdge1.position.y * edge2.position.y) * ratio),
+							  ((TexEdge2.position.y * edge1.position.z - TexEdge1.position.y * edge2.position.z) * ratio));
+
+		vDirection = XMFLOAT3(((TexEdge1.position.x * edge2.position.x - TexEdge2.position.x * edge1.position.x) * ratio),
+							  ((TexEdge1.position.x * edge2.position.y - TexEdge2.position.x * edge1.position.y) * ratio),
+							  ((TexEdge1.position.x * edge2.position.z - TexEdge2.position.x * edge1.position.z) * ratio));
+		// insert the value you found (tangent) into the vector of SIMPLE_VERTEX
+		
+		XMVECTOR normal = XMVectorSet(m_model[j].normal.x, m_model[j].normal.y, m_model[j].normal.z, 0.0f);
+		XMVECTOR uDir = XMVectorSet(uDirection.x, uDirection.y, uDirection.z, 0.0f);
+		 dotResult = XMVector3Dot(normal, uDir);
+		 Tangent = uDir - normal * dotResult.m128_f32[0];
 	}
 
 	
@@ -530,12 +598,16 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateBuffer(&m_vertexBuffer, &m_vertexData, &m_matrixBuffer);
 
+
+	//Setting up the vertex and pixel shaders
 	m_device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), NULL, &m_vertexShader);
 	m_device->CreateVertexShader(Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), NULL, &m_vertexShaderForGeometry);
+	//m_device->CreateVertexShader(Trivial_VS_ForNormalMapping, sizeof(Trivial_VS_ForNormalMapping), NULL, &m_vertexShaderForNormalMap); // normal map vertex shader
 	m_device->CreatePixelShader(Trivial_PS, sizeof(Trivial_PS), NULL, &m_pixelShader);
 	m_device->CreatePixelShader(Trivial_PS_Texture, sizeof(Trivial_PS_Texture), NULL, &m_pixelShaderForTexture);
 	m_device->CreatePixelShader(Trivial_PS_For_Skybox, sizeof(Trivial_PS_For_Skybox), NULL, &m_pixelShaderForSkybox);
 	m_device->CreatePixelShader(Trivial_PS_ForGeometry, sizeof(Trivial_PS_ForGeometry), NULL, &m_pixelShaderForGeometry);
+	//m_device->CreatePixelShader(Trivial_PS_ForNormalMapping, sizeof(Trivial_PS_ForNormalMapping), NULL, &m_pixelShaderForNormalMap);   // normal map pixel shader
 	m_device->CreateGeometryShader(Trivial_GS, sizeof(Trivial_GS),NULL, &m_geometryShader);
 
 	D3D11_INPUT_ELEMENT_DESC m_inputLayout[] =
@@ -556,6 +628,18 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateInputLayout(m_inputLayoutForGS, ARRAYSIZE(m_inputLayoutForGS), Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), &m_layoutForGeometryShader);
 	
+	//setting up the input layout for the normal map taking into account tangent and binormal
+	D3D11_INPUT_ELEMENT_DESC m_inputLayoutForNM[] = 
+	{
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEXTURE", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{"TANGENT",0, DXGI_FORMAT_R32G32B32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT,D3D11_INPUT_PER_VERTEX_DATA,0},
+		{"BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
+	};
+
+
 	//setting up the desc of the constant buffer
 	m_constantBuffer.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	m_constantBuffer.Usage = D3D11_USAGE_DYNAMIC;
@@ -609,9 +693,6 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_constantBufferForSpotLight.ByteWidth = sizeof(SPOT_LIGHT_VERTEX);
 	m_constantBufferForSpotLight.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	
-
-
-
 	//setting up the desc for constant light data
 	m_constantDataForSpotLight.pSysMem = &m_spotLight;
 	m_device->CreateBuffer(&m_constantBufferForSpotLight, &m_constantDataForSpotLight, &m_cBufferForSpotLight);
@@ -669,22 +750,22 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	//setting up the
 	m_geoVertex.m_position = { -6,0,0,1 };
 	m_geoVertex.m_color = { 1,0,0,1 };
-	GEO_VERTEX m_quadPos[3];
+	GEO_VERTEX m_quadPos[2];
 	m_quadPos[0] = m_geoVertex;
 
 	m_geoVertex.m_position = { 6,0,0,1 };
 	m_geoVertex.m_color = { 1,0,0,1 };
 	m_quadPos[1] = m_geoVertex;
 
-	m_geoVertex.m_position = { -6,0,-25,1 };
+	/*m_geoVertex.m_position = { -6,0,-25,1 };
 	m_geoVertex.m_color = { 1,0,0,1 };
-	m_quadPos[2] = m_geoVertex;
+	m_quadPos[2] = m_geoVertex;*/
 
 	//setting up vertex buffer for the geometry shader
 	m_vertexBufferDescForGeometry.Usage = D3D11_USAGE_IMMUTABLE;
 	m_vertexBufferDescForGeometry.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	m_vertexBufferDescForGeometry.CPUAccessFlags = NULL;
-	m_vertexBufferDescForGeometry.ByteWidth = sizeof(GEO_VERTEX)*3;
+	m_vertexBufferDescForGeometry.ByteWidth = sizeof(GEO_VERTEX)*2;
 
 	m_vertexDataForGeometry.pSysMem = m_quadPos;	
 
@@ -822,6 +903,14 @@ bool D3D_DEMO::Run()
 		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.02f), temp.view);
 	}
 
+	vec3.x = temp.view.r[3].m128_f32[0];
+	vec3.y = temp.view.r[3].m128_f32[1];
+	vec3.z = temp.view.r[3].m128_f32[2];
+
+	temp.view.r[3].m128_f32[0] = 0;
+	temp.view.r[3].m128_f32[1] = 0;
+	temp.view.r[3].m128_f32[2] = 0;
+
 	if (GetAsyncKeyState('I') & 0x1)
 	{
 		//m_light.diffuseColor.z += 0.10f;
@@ -885,22 +974,16 @@ bool D3D_DEMO::Run()
 		m_spotLight.lightPosition.x += 0.10f;
 	}
 
-	vec3.x = temp.view.r[3].m128_f32[0];
-	vec3.y = temp.view.r[3].m128_f32[1];
-	vec3.z = temp.view.r[3].m128_f32[2];
-
-	temp.view.r[3].m128_f32[0] = 0;
-	temp.view.r[3].m128_f32[1] = 0;
-	temp.view.r[3].m128_f32[2] = 0;
+	
 
 	if (GetAsyncKeyState(VK_NUMPAD5) & 0x1)
 	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationX(-0.02), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationX(-0.02f), temp.view);
 	}
 
 	if (GetAsyncKeyState(VK_NUMPAD8) & 0x1)
 	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationX(0.02), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationX(0.02f), temp.view);
 	}
 
 	temp.view.r[3].m128_f32[0] = vec3.x;
@@ -1003,7 +1086,7 @@ bool D3D_DEMO::Run()
 	m_deviceContext->IASetInputLayout(m_layoutForGeometryShader);
 	m_deviceContext->GSSetConstantBuffers(0, 2, m_cBuffer);
 	m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
-	m_deviceContext->Draw(3,0);
+	m_deviceContext->Draw(2,0);
 
 	//directional toggle
 	if (GetAsyncKeyState('2') & 0x1)
