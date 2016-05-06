@@ -1,3 +1,6 @@
+#pragma pack_matrix(row_major)
+//#include "LightingCalcs.hlsli"
+
 SamplerState SampleType;
 Texture2D diffuseTexture : register(t0);
 Texture2D blendTexture: register(t1);
@@ -70,7 +73,7 @@ float4 main(PS_IN input) : SV_TARGET
 	lightIntensity = saturate(dot(input.normal, lightDir));
 
 	//pointLight cal
-	lightDirForPointLight = normalize(lightPosForPointLight - input.posW);
+	lightDirForPointLight = normalize(lightPosForPointLight.xyz - input.posW);
 
 	lightRatioForPointLight = saturate(dot(lightDirForPointLight, input.normal));
 
@@ -97,6 +100,8 @@ float4 main(PS_IN input) : SV_TARGET
 	
 	//diffuse color combined with light intensity
 	color = saturate(diffuseColor * lightIntensity);
+	//color.xyz = CalDirectionlLight(lightDir, diffuseColor.xyz, input.normal);
+	//color.w = 1.0f;
 
 	//multiply the texture pixel and the final diffuse color
 	//color = color * textureColor;

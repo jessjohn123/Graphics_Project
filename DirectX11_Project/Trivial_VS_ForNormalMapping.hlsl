@@ -11,8 +11,8 @@ struct V_IN
 struct V_OUT
 {
 	float4 posH : SV_POSITION;
-	float2 tex : TEXTURE;
 	float4 color : COLOR;
+	float2 tex : TEXTURE;
 	float3 normal : NORMAL;
 	float4 m_localCoord : COORD;
 	float4 posW : WPOSITION;

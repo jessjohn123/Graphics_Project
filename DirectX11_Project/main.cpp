@@ -25,8 +25,8 @@ using namespace DirectX;
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-#define BACKBUFFER_WIDTH 800
-#define BACKBUFFER_HEIGHT 600
+#define BACKBUFFER_WIDTH 1280	
+#define BACKBUFFER_HEIGHT 720
 
 //*******************************************//
 //********* SIMPLE WINDOW APP CLASS ********//
@@ -55,15 +55,6 @@ class D3D_DEMO
 		XMFLOAT3 tangent;
 	};
 
-	struct SIMPLE_VERTEX_FOR_NORMAL_MAP
-	{
-		XMFLOAT4 position;
-		XMFLOAT4 color;
-		XMFLOAT2 texture;
-		XMFLOAT3 normal;
-		XMFLOAT3 tangent;
-		XMFLOAT3 binormal;
-	};
 	struct SEND_TO_OBJECT
 	{
 		XMMATRIX worldMatrix;
@@ -73,6 +64,14 @@ class D3D_DEMO
 		XMMATRIX viewMatrix;
 		XMMATRIX proejctionMatrix;
 	};
+
+	struct DIR_VERTEX
+	{
+		XMFLOAT4 diffColor;
+		XMFLOAT3 lightDirt;
+		float padding;
+	};
+
 	struct LIGHT_VERTEX
 	{
 		XMFLOAT4 diffuseColor;
@@ -160,13 +159,16 @@ class D3D_DEMO
 	ID3D11ShaderResourceView *m_PlaneShaderView;
 	ID3D11ShaderResourceView *m_SkyBoxShaderView;
 	ID3D11ShaderResourceView *m_NullShaderView = NULL;
+//	ID3D11ShaderResourceView *m_NormalMapView;								// Normal Map shader resource
 	ID3D11Texture2D *m_secondTexture;
 	ID3D11ShaderResourceView *m_SecondPlaneShaderView;
 	ID3D11SamplerState *m_sampleTexture;
 	XMMATRIX skyboxWorld;
-	ID3D11Buffer *m_lightBuffer;
+	ID3D11Buffer *m_lightBuffer;	
 	ID3D11Buffer * m_PointLightBuffer;
 	ID3D11Buffer * m_SpotLightBuffer;
+	//ID3D11Buffer *m_DirLightBufferForNormalMap;								// Normal Map light buffer
+	DIR_VERTEX m_lightForNormalMap;
 	LIGHT_VERTEX m_light;
 	POINT_LIGHT_VERTEX m_pointLight;
 	SPOT_LIGHT_VERTEX m_spotLight;
@@ -205,7 +207,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	RECT window_size = { 0, 0, BACKBUFFER_WIDTH, BACKBUFFER_HEIGHT };
 	AdjustWindowRect(&window_size, WS_OVERLAPPEDWINDOW, false);
 
-	window = CreateWindow(L"DirectXApplication", L"Lab 1a Line Land", WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX),
+	window = CreateWindow(L"DirectXApplication", L"Lab 1a Line Land", WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, window_size.right - window_size.left, window_size.bottom - window_size.top,
 		NULL, NULL, application, this);
 
@@ -228,6 +230,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	//D3D11_SHADER_RESOURCE_VIEW_DESC secondTexViewDesc;
 	
 	D3D11_SAMPLER_DESC m_texture;
+	//D3D11_BUFFER_DESC lightBufferForNormalMapDesc = {};
 	D3D11_BUFFER_DESC lightBufferDesc = {};
 	D3D11_BUFFER_DESC point_lightBufferDesc = {};
 	D3D11_BUFFER_DESC spotLightBufferDesc = {};
@@ -355,7 +358,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	// create tangents here
 
-	for (unsigned int j = 0; j < indicesForV.size(); j += 3)
+	/*for (unsigned int j = 0; j < indicesForV.size(); j += 3)
 	{
 		// find the 3 verts that pertain to this triangle
 		SIMPLE_VERTEX v1 = m_model[j];
@@ -380,6 +383,7 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 		TexEdge2.texture.x = t2.texture.x - t1.texture.x;
 		TexEdge2.texture.y = t2.texture.y - t1.texture.y;
+
 		// do the fancy math in the powerpoint slides
 		float ratio;
 		XMVECTOR dotResult, Tangent;
@@ -393,13 +397,13 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 		vDirection = XMFLOAT3(((TexEdge1.position.x * edge2.position.x - TexEdge2.position.x * edge1.position.x) * ratio),
 							  ((TexEdge1.position.x * edge2.position.y - TexEdge2.position.x * edge1.position.y) * ratio),
 							  ((TexEdge1.position.x * edge2.position.z - TexEdge2.position.x * edge1.position.z) * ratio));
-		// insert the value you found (tangent) into the vector of SIMPLE_VERTEX
 		
+		// insert the value you found (tangent) into the vector of SIMPLE_VERTEX
 		XMVECTOR normal = XMVectorSet(m_model[j].normal.x, m_model[j].normal.y, m_model[j].normal.z, 0.0f);
 		XMVECTOR uDir = XMVectorSet(uDirection.x, uDirection.y, uDirection.z, 0.0f);
 		 dotResult = XMVector3Dot(normal, uDir);
 		 Tangent = uDir - normal * dotResult.m128_f32[0];
-	}
+	}*/
 
 	
 
@@ -477,6 +481,53 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 		m_planeModel[j].normal.y = norm_vertices[m_normForPlane[j]].y;
 		m_planeModel[j].normal.z = norm_vertices[m_normForPlane[j]].z;
 	}
+
+	/*for (unsigned int j = 0; j < indicesForV.size(); j += 3)
+	{
+		// find the 3 verts that pertain to this triangle
+		SIMPLE_VERTEX vert1 = m_model[j];
+		SIMPLE_VERTEX vert2 = m_model[j + 1];
+		SIMPLE_VERTEX vert3 = m_model[j + 2];
+
+		SIMPLE_VERTEX Edge1, Edge2;
+		Edge1.position.x = vert2.position.x - vert1.position.x;
+		Edge1.position.y = vert2.position.y - vert1.position.y;
+		Edge1.position.z = vert2.position.z - vert1.position.z;
+
+		Edge2.position.x = vert3.position.x - vert2.position.x;
+		Edge2.position.y = vert3.position.y - vert2.position.y;
+		Edge2.position.z = vert3.position.z - vert2.position.z;
+
+		SIMPLE_VERTEX text1 = m_model[j];
+		SIMPLE_VERTEX text2 = m_model[j + 1];
+
+		SIMPLE_VERTEX TextEdge1, TextEdge2;
+		TextEdge1.texture.x = text2.texture.x - text1.texture.x;
+		TextEdge1.texture.y = text2.texture.y - text1.texture.y;
+
+		TextEdge2.texture.x = text2.texture.x - text1.texture.x;
+		TextEdge2.texture.y = text2.texture.y - text1.texture.y;
+
+		// do the fancy math in the powerpoint slides
+		float m_ratio;
+		XMVECTOR m_dotResult, m_Tangent;
+		m_ratio = 1.0f / (TextEdge1.position.x * TextEdge2.position.y - TextEdge2.position.x * TextEdge1.position.y);
+
+		XMFLOAT3 uDir, vDir;
+		uDir = XMFLOAT3(((TextEdge2.position.y * Edge1.position.x - TextEdge1.position.y * Edge2.position.x) * m_ratio),
+			((TextEdge2.position.y * Edge1.position.y - TextEdge1.position.y * Edge2.position.y) * m_ratio),
+			((TextEdge2.position.y * Edge1.position.z - TextEdge1.position.y * Edge2.position.z) * m_ratio));
+
+		vDir = XMFLOAT3(((TextEdge1.position.x * Edge2.position.x - TextEdge2.position.x * Edge1.position.x) * m_ratio),
+			((TextEdge1.position.x * Edge2.position.y - TextEdge2.position.x * Edge1.position.y) * m_ratio),
+			((TextEdge1.position.x * Edge2.position.z - TextEdge2.position.x * Edge1.position.z) * m_ratio));
+
+		// insert the value you found (tangent) into the vector of SIMPLE_VERTEX
+		XMVECTOR m_normal = XMVectorSet(m_model[j].normal.x, m_model[j].normal.y, m_model[j].normal.z, 0.0f);
+		XMVECTOR uDirt = XMVectorSet(uDir.x, uDir.y, uDir.z, 0.0f);
+		m_dotResult = XMVector3Dot(m_normal, uDirt);
+		m_Tangent = uDirt - m_normal * m_dotResult.m128_f32[0];
+	}*/
 
 	//setting up the plane model vertex buffer
 	D3D11_BUFFER_DESC modelVertDescForPlane;
@@ -629,17 +680,17 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateInputLayout(m_inputLayoutForGS, ARRAYSIZE(m_inputLayoutForGS), Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), &m_layoutForGeometryShader);
 	
 	//setting up the input layout for the normal map taking into account tangent and binormal
-	D3D11_INPUT_ELEMENT_DESC m_inputLayoutForNM[] = 
+	/*D3D11_INPUT_ELEMENT_DESC m_inputLayoutForNM[] = 
 	{
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0 },
 		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "TEXTURE", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{"TANGENT",0, DXGI_FORMAT_R32G32B32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT,D3D11_INPUT_PER_VERTEX_DATA,0},
-		{"BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
 	};
 
-
+	m_device->CreateInputLayout(m_inputLayoutForNM, ARRAYSIZE(m_inputLayoutForNM), Trivial_VS_ForNormalMapping, sizeof(Trivial_VS_ForNormalMapping), &m_layoutForNormalMap);*/
+	
 	//setting up the desc of the constant buffer
 	m_constantBuffer.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	m_constantBuffer.Usage = D3D11_USAGE_DYNAMIC;
@@ -653,9 +704,25 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	m_constantBuffer.ByteWidth = sizeof(SEND_TO_SCENE);
 	m_device->CreateBuffer(&m_constantBuffer, &m_constantData, &m_cBuffer[1]);
 
+	////Constant Buffer directional light set up for Normal Map
+	//m_lightForNormalMap.diffColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	////setting the direction of light to positive z-axis
+	//m_lightForNormalMap.lightDirt = { 0.0f, 0.0f, 1.0f };        
+	//
+	////setting up the desc of the dir light for normal map
+	//m_constantBufferForDirLightForNM.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	//m_constantBufferForDirLightForNM.Usage = D3D11_USAGE_DYNAMIC;
+	//m_constantBufferForDirLightForNM.ByteWidth = sizeof(DIR_VERTEX);
+	//m_constantBufferForDirLightForNM.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	////setting up the desc for dir light data
+	//m_constantDataForDirLightForNM.pSysMem = &m_lightForNormalMap;
+	//m_device->CreateBuffer(&m_constantBufferForDirLightForNM, &m_constantDataForDirLightForNM, &m_cBufferForNormalMap);
+
 	//Directional Light
 	m_light.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
 	m_light.lightDirection = { -1.0f,-0.5f,0.0f };
+
 	//setting up the desc of the constant buffer light
 	m_constantBufferForLight.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	m_constantBufferForLight.Usage = D3D11_USAGE_DYNAMIC;
@@ -716,6 +783,16 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 
 	m_indexData.pSysMem = &indices;
 	m_device->CreateBuffer(&m_indexBuffer, &m_indexData, &m_iBuffer);
+
+	////setting up the desc of the light dynamic constant buffer for normal map
+	//lightBufferForNormalMapDesc.Usage = D3D11_USAGE_DYNAMIC;
+	//lightBufferForNormalMapDesc.ByteWidth = sizeof(m_lightForNormalMap);
+	//lightBufferForNormalMapDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	//lightBufferForNormalMapDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	//lightBufferForNormalMapDesc.MiscFlags = 0;
+	//lightBufferForNormalMapDesc.StructureByteStride = 0;
+
+	//m_device->CreateBuffer(&lightBufferForNormalMapDesc, NULL, &m_DirLightBufferForNormalMap);
 
 	//setting up the desc of the light dynamic constant buffer 
 	lightBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -828,6 +905,9 @@ D3D_DEMO::D3D_DEMO(HINSTANCE hinst, WNDPROC proc)
 	CreateDDSTextureFromFile(m_device, L"Textures/brickwall.dds", NULL, &m_SecondPlaneShaderView);
 	//setting up desc for skybox
 	CreateDDSTextureFromFile(m_device, L"mp_rip/OutputCube.dds", NULL, &m_SkyBoxShaderView);
+	//setting up desc for loading normal map texture
+	//CreateDDSTextureFromFile(m_device, L"Textures/NormalMap(1).dds", NULL, &m_NormalMapView);
+
 
 	//raster desc for skybox
 	m_RasterDesc.CullMode = D3D11_CULL_NONE;
@@ -1123,27 +1203,21 @@ bool D3D_DEMO::Run()
 	m_deviceContext->PSSetConstantBuffers(1, 1, &m_cBufferForPointLight);
 	m_deviceContext->PSSetConstantBuffers(2, 1, &m_cBufferForSpotLight);
 
-	////plane
-	//m_deviceContext->VSGetConstantBuffers(0, 2, m_cBuffer);
-	//m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
-	//m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
-	//m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-	//m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
-	//m_deviceContext->PSSetShaderResources(1, 1, &m_SecondPlaneShaderView);
-	//m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
-	//m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
-
 
 	//Ogre_model
 	stride = sizeof(SIMPLE_VERTEX);
 	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	//m_deviceContext->IASetInputLayout(m_layoutForNormalMap);
+	/*m_deviceContext->VSSetShader(m_vertexShaderForNormalMap, NULL, NULL);
+	m_deviceContext->PSSetShader(m_pixelShaderForNormalMap, NULL, NULL);*/
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
 	m_deviceContext->IASetInputLayout(m_layout);
 	m_deviceContext->VSSetShader(m_vertexShader, NULL, NULL);
 	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
-	m_deviceContext->GSSetShader(NULL, NULL, NULL);
 	m_deviceContext->IASetIndexBuffer(m_modelIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	m_deviceContext->IASetVertexBuffers(0, 1, &m_modelVertexBuffer, &stride, &offsets);
 	m_deviceContext->PSSetShaderResources(0, 1, &m_textureView);
+	//m_deviceContext->PSSetShaderResources(1, 1, &m_NormalMapView);
 	m_deviceContext->DrawIndexed(modelSize, 0, 0);
 
 	// plane
@@ -1193,17 +1267,21 @@ bool D3D_DEMO::ShutDown()
 	m_cBufferForLight->Release();
 	m_cBufferForPointLight->Release();
 	m_cBufferForSpotLight->Release();
+	//m_cBufferForNormalMap->Release();
 	m_iBuffer->Release();
 	z_buffer->Release();
 	m_vertexShader->Release();
 	m_vertexShaderForGeometry->Release();
+	//m_vertexShaderForNormalMap->Release();
 	m_pixelShader->Release();
 	m_pixelShaderForGeometry->Release();
 	m_pixelShaderForTexture->Release();
 	m_pixelShaderForSkybox->Release();
+	//m_pixelShaderForNormalMap->Release();
 	m_geometryShader->Release();
 	m_layout->Release();
 	m_layoutForGeometryShader->Release();
+	//m_layoutForNormalMap->Release();
 	m_modelVertexBuffer->Release();
 	m_modelIndexBuffer->Release();
 	m_planeVertexBuffer->Release();
@@ -1214,6 +1292,7 @@ bool D3D_DEMO::ShutDown()
 	m_textureView->Release();
 	m_PlaneShaderView->Release();
 	m_SkyBoxShaderView->Release();
+	//m_NormalMapView->Release();
 //	m_NullShaderView->Release();
 	m_secondTexture->Release();
 	m_SecondPlaneShaderView->Release();
@@ -1221,6 +1300,7 @@ bool D3D_DEMO::ShutDown()
 	m_lightBuffer->Release();
 	m_PointLightBuffer->Release();
 	m_SpotLightBuffer->Release();
+	//m_DirLightBufferForNormalMap->Release();
 	m_vertexBufferForGeometry->Release();
 	//ptrToBackBuffer
 	ptrToBackBuffer->Release();

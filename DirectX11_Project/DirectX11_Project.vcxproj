@@ -260,10 +260,13 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="DirectX11_Project\Textures\NormalMap (1).jpg" />
     <Image Include="OgreTextures\SkinColorMostro_COLOR.png" />
-    <Image Include="Textures\brickwall.dds" />
     <Image Include="Textures\brickwall.jpg" />
     <Image Include="Textures\DSC_4439.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="LightingCalcs.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
