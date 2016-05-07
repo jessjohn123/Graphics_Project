@@ -25,8 +25,8 @@ using namespace DirectX;
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-#define BACKBUFFER_WIDTH 1280	
-#define BACKBUFFER_HEIGHT 720
+//#define BACKBUFFER_WIDTH 1280	
+//#define BACKBUFFER_HEIGHT 720
 
 //*******************************************//
 //********* SIMPLE WINDOW APP CLASS ********//
@@ -941,44 +941,44 @@ bool D3D_DEMO::Run()
 	XMFLOAT3 vec3;
 
 
-	if (GetAsyncKeyState('W') & 0x1)
+	if (GetAsyncKeyState('W'))
 	{
 		temp.view.r[3].m128_f32[2] += 0.02f;	
 	}
 
-	if (GetAsyncKeyState('S') & 0x1)
+	if (GetAsyncKeyState('S'))
 	{
 		temp.view.r[3].m128_f32[2] -= 0.02f;
 		//m_light.lightDirection.z -= 0.02f
 	}
 
-	if (GetAsyncKeyState('A') & 0x1)
+	if (GetAsyncKeyState('A'))
 	{
 		temp.view.r[3].m128_f32[0] -= 0.02f;
 	}
 
-	if (GetAsyncKeyState('D') & 0x1)
+	if (GetAsyncKeyState('D'))
 	{
 		temp.view.r[3].m128_f32[0] += 0.02f;
 	}
 
-	if (GetAsyncKeyState(VK_UP) & 0x1)
+	if (GetAsyncKeyState(VK_UP))
 	{
 		temp.view.r[3].m128_f32[1] += 0.02f;
 	}
 
-	if (GetAsyncKeyState(VK_DOWN) & 0x1)
+	if (GetAsyncKeyState(VK_DOWN))
 	{
 		temp.view.r[3].m128_f32[1] -= 0.02f;
 	}
 
 	//setting up the camera rotation
-	if (GetAsyncKeyState(VK_NUMPAD6) & 0x1)
+	if (GetAsyncKeyState(VK_NUMPAD6))
 	{
 		temp.view = XMMatrixMultiply(XMMatrixRotationY(0.02f), temp.view);
 	}
 
-	if (GetAsyncKeyState(VK_NUMPAD4) & 0x1)
+	if (GetAsyncKeyState(VK_NUMPAD4))
 	{
 		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.02f), temp.view);
 	}
@@ -991,77 +991,77 @@ bool D3D_DEMO::Run()
 	temp.view.r[3].m128_f32[1] = 0;
 	temp.view.r[3].m128_f32[2] = 0;
 
-	if (GetAsyncKeyState('I') & 0x1)
+	if (GetAsyncKeyState('I'))
 	{
 		//m_light.diffuseColor.z += 0.10f;
-		m_light.lightDirection.z += 0.10f;
+		m_light.lightDirection.z += 0.02f;
 	}
-	if (GetAsyncKeyState('K') & 0x1)
+	if (GetAsyncKeyState('K'))
 	{
 		//m_light.diffuseColor.z -= 0.10f;
-		m_light.lightDirection.z -= 0.10f;
+		m_light.lightDirection.z -= 0.02f;
 	}
-	if (GetAsyncKeyState('J') & 0x1)
+	if (GetAsyncKeyState('J'))
 	{
 		//m_light.diffuseColor.x -= 0.10f;
-		m_light.lightDirection.x -= 0.10f;
+		m_light.lightDirection.x -= 0.02f;
 	}
-	if (GetAsyncKeyState('L') & 0x1)
+	if (GetAsyncKeyState('L'))
 	{
 		//m_light.diffuseColor.x += 0.10f;
-		m_light.lightDirection.x += 0.10f;
+		m_light.lightDirection.x += 0.02f;
 	}
 	//movement code for pointlight
-	if(GetAsyncKeyState('F') & 0x1)
+	if(GetAsyncKeyState('F'))
 	{
 		//m_light.diffuseColor.z += 0.10f;
-		m_pointLight.lightPos.z += 0.10f;
+		m_pointLight.lightPos.z += 0.02f;
 	}
-	if (GetAsyncKeyState('V') & 0x1)
+	if (GetAsyncKeyState('V'))
 	{
 		//m_light.diffuseColor.z -= 0.10f;
-		m_pointLight.lightPos.z -= 0.10f;
+		m_pointLight.lightPos.z -= 0.02f;
 	}
-	if (GetAsyncKeyState('C') & 0x1)
+	if (GetAsyncKeyState('C'))
 	{
 		//m_light.diffuseColor.x -= 0.10f;
-		m_pointLight.lightPos.x -= 0.10f;
+		m_pointLight.lightPos.x -= 0.02f;
 	}
-	if (GetAsyncKeyState('B') & 0x1)
+	if (GetAsyncKeyState('B'))
 	{
 		//m_light.diffuseColor.x += 0.10f;
-		m_pointLight.lightPos.x += 0.10f;
+		m_pointLight.lightPos.x += 0.02f;
 	}
 
 	//movement code for spotlight
-	if (GetAsyncKeyState('Y') & 0x1)
+	if (GetAsyncKeyState('Y'))
 	{
-		m_spotLight.lightPosition.z += 0.10f;
+		m_spotLight.lightPosition.z += 0.02f;
 	}
 
-	if (GetAsyncKeyState('H') & 0x1)
+	if (GetAsyncKeyState('H'))
 	{
-		m_spotLight.lightPosition.z -= 0.10f;
+		m_spotLight.lightPosition.z -= 0.02f;
 	}
 
-	if (GetAsyncKeyState('T') & 0x1)
+	if (GetAsyncKeyState('T'))
 	{
-		m_spotLight.lightPosition.x -= 0.10f;
+		m_spotLight.lightPosition.x -= 0.02f;
 	}
 
-	if (GetAsyncKeyState('U') & 0x1)
+	if (GetAsyncKeyState('U'))
 	{
-		m_spotLight.lightPosition.x += 0.10f;
+		m_spotLight.lightPosition.x += 0.02f;
 	}
 
 	
 
-	if (GetAsyncKeyState(VK_NUMPAD5) & 0x1)
+	if (GetAsyncKeyState(VK_NUMPAD5))
 	{
 		temp.view = XMMatrixMultiply(XMMatrixRotationX(-0.02f), temp.view);
 	}
 
-	if (GetAsyncKeyState(VK_NUMPAD8) & 0x1)
+	if (GetAsyncKeyState(VK_NUMPAD8))
 	{
 		temp.view = XMMatrixMultiply(XMMatrixRotationX(0.02f), temp.view);
 	}
@@ -1087,6 +1087,7 @@ bool D3D_DEMO::Run()
 	m_deviceContext->ClearRenderTargetView(m_renderTargetView, black);
 	m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
+	toObject.worldMatrix = skyboxWorld;
 	
 	D3D11_MAPPED_SUBRESOURCE m_mapSource;
 	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
@@ -1129,6 +1130,7 @@ bool D3D_DEMO::Run()
 	//skybox
 	m_deviceContext->RSSetState(m_rasterForSkybox);
 	m_deviceContext->VSSetShader(m_vertexShader, NULL, NULL);
+	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
 	m_deviceContext->PSSetShader(m_pixelShaderForSkybox, NULL, NULL);
 	m_deviceContext->IASetVertexBuffers(0, 1, &m_skyboxVertexBuffer, &stride, &offsets);
 	m_deviceContext->IASetIndexBuffer(m_skyboxIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
@@ -1231,7 +1233,7 @@ bool D3D_DEMO::Run()
 	m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
 	m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
 
-	toObject.worldMatrix = skyboxWorld;
+	
 
 	m_SwapChain->Present(0, 0);
 
