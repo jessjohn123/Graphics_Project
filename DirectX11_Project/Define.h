@@ -25,7 +25,7 @@ using namespace DirectX;
 #define MAGENTA_COLOR 0xFF00FF
 
 #define FIELDOFVIEW 65
-#define ASPECTRATIO ((BACKBUFFER_WIDTH) / (BACKBUFFER_HEIGHT))
+#define ASPECTRATIO ((BACKBUFFER_WIDTH) / (float)(BACKBUFFER_HEIGHT))
 const float SCREEN_DEPTH = 1000.0f;
 const float SCREEN_NEAR = 0.1f;
 

@@ -65,29 +65,30 @@ float4 main(PS_IN input) : SV_TARGET
 		finalTextures = textureColor * combineTwoTextures;
 	}
 
-	//finalTextures.a = 1;
+	// Directional Light Cal
 	//dot product btw normal vector & the light dir
 	lightDir = -lightDirection;
 
 	//amt of light on pixel
 	lightIntensity = saturate(dot(input.normal, lightDir));
 
-	//pointLight cal
-	lightDirForPointLight = normalize(lightPosForPointLight.xyz - input.posW);
+	//diffuse color combined with light intensity
+	color = saturate(diffuseColor * lightIntensity);
+
+	//Point Light Cal
+	lightDirForPointLight = normalize(lightPosForPointLight.xyz - input.posW.xyz);
 
 	lightRatioForPointLight = saturate(dot(lightDirForPointLight, input.normal));
 
 	color1 = saturate(diffuseColorForPointLight * lightRatioForPointLight);
 
-	//color1 = color1 * textureColor;
-
-	Attenuation = 1.0 - saturate(length((lightPosForPointLight - input.posW) / radius));
+	Attenuation = 1.0 - saturate(length((lightPosForPointLight.xyz - input.posW.xyz) / radius));
 
 	color1 *= Attenuation;
 
-	//spotlight cal
+	//Spot Light Cal
 
-	lightDirForSpotLight = normalize(LightPosForSpotLight - input.posW);
+	lightDirForSpotLight = normalize(LightPosForSpotLight - input.posW.xyz);
 
 	SpotLightSurfaceRatio = saturate(dot(-lightDirForSpotLight, ConeDirection));
 
@@ -97,12 +98,14 @@ float4 main(PS_IN input) : SV_TARGET
 
 	color2 = SpotLightRatio * SpotLightColor * SpotFactor;
 	
-	
-	//diffuse color combined with light intensity
-	color = saturate(diffuseColor * lightIntensity);
-	//color.xyz = CalDirectionlLight(lightDir, diffuseColor.xyz, input.normal);
-	//color.w = 1.0f;
+	// trying implement through function
+	/*color.xyz = CalDirectionlLight(lightDir, diffuseColor.xyz, input.normal);
+	color.w = 1.0f;
 
+	color1.xyz = CalPointLight(lightPosForPointLight.xyz, diffuseColorForPointLight.xyz, input.normal, input.posW, radius);
+	color1.w = 1.0f;
+
+	color2.xyz = CalSpotLight(LightPosForSpotLight.xyz, SpotLightColor.xyz, ConeDirection, ConeRatio, input.normal, input.posW);*/
 	//multiply the texture pixel and the final diffuse color
 	//color = color * textureColor;
 

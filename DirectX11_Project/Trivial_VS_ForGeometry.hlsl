@@ -30,11 +30,11 @@ V_OUT main(V_IN input)
 	// ensures translation is preserved during matrix multiply  
 	float4 localH = float4(input.posL.xyz, 1);
 	// move local space vertex from vertex buffer into world space.
-	localH = mul(localH, worldMatrix);
+	//localH = mul(localH, worldMatrix);
 
 	// TODO: Move into view space, then projection space
-	localH = mul(localH, viewMatrix);
-	localH = mul(localH, projectionMatrix);
+	//localH = mul(localH, viewMatrix);
+	//localH = mul(localH, projectionMatrix);
 
 	output.posH = localH;
 
