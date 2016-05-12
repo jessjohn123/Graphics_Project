@@ -141,11 +141,13 @@ class D3D_DEMO
 	//ID3D11InputLayout* m_layoutForNormalMap;							//normal map input layer
 	D3D11_VIEWPORT m_viewport;
 	D3D11_VIEWPORT m_secondViewPort;
+	D3D11_VIEWPORT m_thirdViewPort;
 	D3D_FEATURE_LEVEL m_featureLevel;
 	unsigned int num_of_vertices;
 	SEND_TO_OBJECT toObject;
 	SEND_TO_SCENE toScene;
 	MatrixBufferType temp;
+	MatrixBufferType m_tempForVP;
 	SIMPLE_VERTEX* m_model;
 	unsigned int *vert_indices, *text_indices, *norm_indices;
 	LoadMesh loadObj;
@@ -197,6 +199,7 @@ public:
 	bool ShutDown();
 	void ResizingOfWindows();
 	void secondViewPort();
+	void thirdViewPort();
 };
 
 void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
@@ -267,7 +270,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	swapChainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	swapChainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
-	swapChainDesc.SampleDesc.Count = 1;
+	swapChainDesc.SampleDesc.Count = 4;
 	swapChainDesc.SampleDesc.Quality = NULL;
 
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -790,8 +793,13 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	skyboxWorld = XMMatrixIdentity();
 	toObject.worldMatrix = XMMatrixIdentity();
 
+	//setting up the view for third viewport
+	m_tempForVP.view = XMMatrixIdentity();
+	m_tempForVP.world = XMMatrixIdentity();
+	m_tempForVP.view.r[3].m128_f32[2] = -5;
+
 	//setting up the projection for rendering 3D model
-	toScene.proejctionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(90), ASPECTRATIO, SCREEN_NEAR, SCREEN_DEPTH);
+	toScene.proejctionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(60), ASPECTRATIO, SCREEN_NEAR, SCREEN_DEPTH);
 
 	//setting up the desc of the index buffer
 	m_indexBuffer.Usage = D3D11_USAGE_IMMUTABLE;
@@ -843,12 +851,12 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateBuffer(&spotLightBufferDesc, NULL, &m_SpotLightBuffer);
 
 	//setting up the
-	m_geoVertex.m_position = { -6,0,0,1 };
+	m_geoVertex.m_position = { -4,0,0,1 };
 	m_geoVertex.m_color = { 1,0,0,1 };
 	GEO_VERTEX m_quadPos[2];
 	m_quadPos[0] = m_geoVertex;
 
-	m_geoVertex.m_position = { 6,0,0,1 };
+	m_geoVertex.m_position = { 4,0,0,1 };
 	m_geoVertex.m_color = { 1,0,0,1 };
 	m_quadPos[1] = m_geoVertex;
 
@@ -874,7 +882,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_texture2D.Format = DXGI_FORMAT_D32_FLOAT;
 	m_texture2D.MipLevels = 1;
 	m_texture2D.ArraySize = 1;
-	m_texture2D.SampleDesc.Count = 1;
+	m_texture2D.SampleDesc.Count = 4;
 	m_device->CreateTexture2D(&m_texture2D, NULL, &z_buffer);
 
 	//second texture2d setup
@@ -886,7 +894,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	secondTextureDesc.Format = DXGI_FORMAT_D32_FLOAT;
 	secondTextureDesc.MipLevels = 1;
 	secondTextureDesc.ArraySize = 1;
-	secondTextureDesc.SampleDesc.Count = 1;
+	secondTextureDesc.SampleDesc.Count = 4;
 	secondTextureDesc.CPUAccessFlags = 0;
 	secondTextureDesc.MiscFlags = 0;
 	m_device->CreateTexture2D(&secondTextureDesc, NULL, &m_secondTexture);
@@ -898,7 +906,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	d_stencil.Format = DXGI_FORMAT_D32_FLOAT;
 	d_stencil.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 	d_stencil.Texture2D.MipSlice = 0;
-	m_device->CreateDepthStencilView(z_buffer, &d_stencil, &m_depthStencilView);
+	m_device->CreateDepthStencilView(z_buffer, NULL, &m_depthStencilView);
 
 	//setting up the raster
 	m_RasterDesc.FillMode = D3D11_FILL_SOLID;
@@ -994,13 +1002,13 @@ void D3D_DEMO::ResizingOfWindows()
 	m_texture2D.Format = DXGI_FORMAT_D32_FLOAT;
 	m_texture2D.MipLevels = 1;
 	m_texture2D.ArraySize = 1;
-	m_texture2D.SampleDesc.Count = 1;
+	m_texture2D.SampleDesc.Count = 4;
 	m_device->CreateTexture2D(&m_texture2D, NULL, &z_buffer);
 
 	d_stencil.Format = DXGI_FORMAT_D32_FLOAT;
 	d_stencil.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 	d_stencil.Texture2D.MipSlice = 0;
-	m_device->CreateDepthStencilView(z_buffer, &d_stencil, &m_depthStencilView);
+	m_device->CreateDepthStencilView(z_buffer, NULL, &m_depthStencilView);
 
 
 	m_deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView);
@@ -1019,6 +1027,178 @@ bool D3D_DEMO::Run()
 {
 	time.Signal();
 
+	//Movement code
+	XMFLOAT3 vec3;
+	if (GetAsyncKeyState('W'))
+	{
+		//temp.view.r[3].m128_f32[2] += 0.02f;
+		temp.view.r[3].m128_f32[2] += time.Delta();
+	}
+
+	if (GetAsyncKeyState('S'))
+	{
+		//temp.view.r[3].m128_f32[2] -= 0.02f;
+		//m_light.lightDirection.z -= 0.02f
+		temp.view.r[3].m128_f32[2] -= time.Delta();
+
+	}
+
+	if (GetAsyncKeyState('A'))
+	{
+		//temp.view.r[3].m128_f32[0] -= 0.02f;
+		temp.view.r[3].m128_f32[0] -= time.Delta();
+	}
+
+	if (GetAsyncKeyState('D'))
+	{
+		//temp.view.r[3].m128_f32[0] += 0.02f;
+		temp.view.r[3].m128_f32[0] += time.Delta();
+	}
+
+	if (GetAsyncKeyState(VK_UP))
+	{
+		temp.view.r[3].m128_f32[1] += time.Delta();
+	}
+
+	if (GetAsyncKeyState(VK_DOWN))
+	{
+		temp.view.r[3].m128_f32[1] -= time.Delta();
+	}
+
+	//setting up the camera rotation
+	if (GetAsyncKeyState(VK_NUMPAD6))
+	{
+		//temp.view = XMMatrixMultiply(XMMatrixRotationY(0.02), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationY(time.Delta()), temp.view);
+	}
+
+	if (GetAsyncKeyState(VK_NUMPAD4))
+	{
+		//temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.02f), temp.view);
+		temp.view = XMMatrixMultiply(XMMatrixRotationY(-(time.Delta())), temp.view);
+	}
+
+	vec3.x = temp.view.r[3].m128_f32[0];
+	vec3.y = temp.view.r[3].m128_f32[1];
+	vec3.z = temp.view.r[3].m128_f32[2];
+
+	temp.view.r[3].m128_f32[0] = 0;
+	temp.view.r[3].m128_f32[1] = 0;
+	temp.view.r[3].m128_f32[2] = 0;
+
+	if (GetAsyncKeyState('I'))
+	{
+		//m_light.diffuseColor.z += 0.10f;
+		m_light.lightDirection.z += time.Delta();
+	}
+	if (GetAsyncKeyState('K'))
+	{
+		//m_light.diffuseColor.z -= 0.10f;
+		m_light.lightDirection.z -= time.Delta();
+	}
+	if (GetAsyncKeyState('J'))
+	{
+		//m_light.diffuseColor.x -= 0.10f;
+		m_light.lightDirection.x -= time.Delta();
+	}
+	if (GetAsyncKeyState('L'))
+	{
+		//m_light.diffuseColor.x += 0.10f;
+		m_light.lightDirection.x += time.Delta();
+	}
+	//movement code for pointlight
+	if (GetAsyncKeyState('F'))
+	{
+		//m_light.diffuseColor.z += 0.10f;
+		m_pointLight.lightPos.z += time.Delta();
+	}
+	if (GetAsyncKeyState('V'))
+	{
+		//m_light.diffuseColor.z -= 0.10f;
+		m_pointLight.lightPos.z -= time.Delta();
+	}
+	if (GetAsyncKeyState('C'))
+	{
+		//m_light.diffuseColor.x -= 0.10f;
+		m_pointLight.lightPos.x -= time.Delta();
+	}
+	if (GetAsyncKeyState('B'))
+	{
+		//m_light.diffuseColor.x += 0.10f;
+		m_pointLight.lightPos.x += time.Delta();
+	}
+
+	//movement code for spotlight
+	if (GetAsyncKeyState('Y'))
+	{
+		m_spotLight.lightPosition.z += time.Delta();
+	}
+
+	if (GetAsyncKeyState('H'))
+	{
+		m_spotLight.lightPosition.z -= time.Delta();
+	}
+
+	if (GetAsyncKeyState('T'))
+	{
+		m_spotLight.lightPosition.x -= time.Delta();
+	}
+
+	if (GetAsyncKeyState('U'))
+	{
+		m_spotLight.lightPosition.x += time.Delta();
+	}
+
+	if (GetAsyncKeyState(VK_NUMPAD5))
+	{
+		temp.view = XMMatrixMultiply(XMMatrixRotationX(-(time.Delta())), temp.view);
+	}
+
+	if (GetAsyncKeyState(VK_NUMPAD8))
+	{
+		temp.view = XMMatrixMultiply(XMMatrixRotationX(time.Delta()), temp.view);
+	}
+
+	temp.view.r[3].m128_f32[0] = vec3.x;
+	temp.view.r[3].m128_f32[1] = vec3.y;
+	temp.view.r[3].m128_f32[2] = vec3.z;
+
+	skyboxWorld.r[3].m128_f32[0] = vec3.x;
+	skyboxWorld.r[3].m128_f32[1] = vec3.y;
+	skyboxWorld.r[3].m128_f32[2] = vec3.z;
+
+	//directional toggle
+	if (GetAsyncKeyState('2') & 0x1)
+	{
+		m_light.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
+	}
+	if (GetAsyncKeyState('1') & 0x1)
+	{
+		m_light.diffuseColor = { 0.4f,1.0f,0.4f,0.4f };
+	}
+
+	//pointlight toggle
+	if (GetAsyncKeyState('3') & 0x1)
+	{
+		m_pointLight.diffuseColor = { 0.4f,0.4f,1.0f,0.4f };
+	}
+
+	if (GetAsyncKeyState('4') & 0x1)
+	{
+		m_pointLight.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
+	}
+
+	//spotlight toggle
+	if (GetAsyncKeyState('5') & 0x1)
+	{
+		m_spotLight.diffuseColor = { 1.0f,0.4f,0.4f,0.4f };
+	}
+	if (GetAsyncKeyState('6') & 0x1)
+	{
+		m_spotLight.diffuseColor = { 1.0, 1.0f, 1.0f, 1.0f };
+	}
+
+
 	if (GetAsyncKeyState(VK_SPACE) & 0x1)
 	{
 		bSplitScreen = !bSplitScreen;
@@ -1028,155 +1208,10 @@ bool D3D_DEMO::Run()
 	{
 		//rotation of the star
 		toObject.worldMatrix = XMMatrixMultiply(XMMatrixRotationY(XMConvertToRadians(5.0f)), toObject.worldMatrix);
-		// Camera Movement
-		XMFLOAT3 vec3;
-
-
-		if (GetAsyncKeyState('W'))
-		{
-			//temp.view.r[3].m128_f32[2] += 0.02f;
-			temp.view.r[3].m128_f32[2] += time.Delta();
-		}
-
-		if (GetAsyncKeyState('S'))
-		{
-			//temp.view.r[3].m128_f32[2] -= 0.02f;
-			//m_light.lightDirection.z -= 0.02f
-			temp.view.r[3].m128_f32[2] -= time.Delta();
-
-		}
-
-		if (GetAsyncKeyState('A'))
-		{
-			//temp.view.r[3].m128_f32[0] -= 0.02f;
-			temp.view.r[3].m128_f32[0] -= time.Delta();
-		}
-
-		if (GetAsyncKeyState('D'))
-		{
-			//temp.view.r[3].m128_f32[0] += 0.02f;
-			temp.view.r[3].m128_f32[0] += time.Delta();
-		}
-
-		if (GetAsyncKeyState(VK_UP))
-		{
-			temp.view.r[3].m128_f32[1] += time.Delta();
-		}
-
-		if (GetAsyncKeyState(VK_DOWN))
-		{
-			temp.view.r[3].m128_f32[1] -= time.Delta();
-		}
-
-		//setting up the camera rotation
-		if (GetAsyncKeyState(VK_NUMPAD6))
-		{
-			//temp.view = XMMatrixMultiply(XMMatrixRotationY(0.02), temp.view);
-			temp.view = XMMatrixMultiply(XMMatrixRotationY(time.Delta()), temp.view);
-		}
-
-		if (GetAsyncKeyState(VK_NUMPAD4))
-		{
-			temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.02f), temp.view);
-			temp.view = XMMatrixMultiply(XMMatrixRotationY(-(time.Delta())), temp.view);
-		}
-
-		vec3.x = temp.view.r[3].m128_f32[0];
-		vec3.y = temp.view.r[3].m128_f32[1];
-		vec3.z = temp.view.r[3].m128_f32[2];
-
-		temp.view.r[3].m128_f32[0] = 0;
-		temp.view.r[3].m128_f32[1] = 0;
-		temp.view.r[3].m128_f32[2] = 0;
-
-		if (GetAsyncKeyState('I'))
-		{
-			//m_light.diffuseColor.z += 0.10f;
-			m_light.lightDirection.z += time.Delta();
-		}
-		if (GetAsyncKeyState('K'))
-		{
-			//m_light.diffuseColor.z -= 0.10f;
-			m_light.lightDirection.z -= time.Delta();
-		}
-		if (GetAsyncKeyState('J'))
-		{
-			//m_light.diffuseColor.x -= 0.10f;
-			m_light.lightDirection.x -= time.Delta();
-		}
-		if (GetAsyncKeyState('L'))
-		{
-			//m_light.diffuseColor.x += 0.10f;
-			m_light.lightDirection.x += time.Delta();
-		}
-		//movement code for pointlight
-		if (GetAsyncKeyState('F'))
-		{
-			//m_light.diffuseColor.z += 0.10f;
-			m_pointLight.lightPos.z += time.Delta();
-		}
-		if (GetAsyncKeyState('V'))
-		{
-			//m_light.diffuseColor.z -= 0.10f;
-			m_pointLight.lightPos.z -= time.Delta();
-		}
-		if (GetAsyncKeyState('C'))
-		{
-			//m_light.diffuseColor.x -= 0.10f;
-			m_pointLight.lightPos.x -= time.Delta();
-		}
-		if (GetAsyncKeyState('B'))
-		{
-			//m_light.diffuseColor.x += 0.10f;
-			m_pointLight.lightPos.x += time.Delta();
-		}
-
-		//movement code for spotlight
-		if (GetAsyncKeyState('Y'))
-		{
-			m_spotLight.lightPosition.z += time.Delta();
-		}
-
-		if (GetAsyncKeyState('H'))
-		{
-			m_spotLight.lightPosition.z -= time.Delta();
-		}
-
-		if (GetAsyncKeyState('T'))
-		{
-			m_spotLight.lightPosition.x -= time.Delta();
-		}
-
-		if (GetAsyncKeyState('U'))
-		{
-			m_spotLight.lightPosition.x += time.Delta();
-		}
-
-
-
-		if (GetAsyncKeyState(VK_NUMPAD5))
-		{
-			temp.view = XMMatrixMultiply(XMMatrixRotationX(-(time.Delta())), temp.view);
-		}
-
-		if (GetAsyncKeyState(VK_NUMPAD8))
-		{
-			temp.view = XMMatrixMultiply(XMMatrixRotationX(time.Delta()), temp.view);
-		}
-
-		temp.view.r[3].m128_f32[0] = vec3.x;
-		temp.view.r[3].m128_f32[1] = vec3.y;
-		temp.view.r[3].m128_f32[2] = vec3.z;
-
-		skyboxWorld.r[3].m128_f32[0] = vec3.x;
-		skyboxWorld.r[3].m128_f32[1] = vec3.y;
-		skyboxWorld.r[3].m128_f32[2] = vec3.z;
-		//orientation of model
-		//toScene.proejctionMatrix = temp.projection;
-	 
+		
 		//desc of camera
 		toScene.viewMatrix = XMMatrixInverse(NULL, temp.view);
-
+		
 		m_deviceContext->RSSetState(m_rasterState);
 		m_deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView);
 
@@ -1241,14 +1276,12 @@ bool D3D_DEMO::Run()
 
 		m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-
 		//for rest of the drawing
 		toObject.worldMatrix = temp.world;
 		m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
 		m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
 		*m_temp = toObject;
 		m_deviceContext->Unmap(m_cBuffer[0], 0);
-
 
 		//star
 		m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
@@ -1269,41 +1302,10 @@ bool D3D_DEMO::Run()
 		m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
 		m_deviceContext->Draw(2, 0);
 
-		//directional toggle
-		if (GetAsyncKeyState('2') & 0x1)
-		{
-			m_light.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
-		}
-		if (GetAsyncKeyState('1') & 0x1)
-		{
-			m_light.diffuseColor = { 0.4f,1.0f,0.4f,0.4f };
-		}
-
-		//pointlight toggle
-		if (GetAsyncKeyState('3') & 0x1)
-		{
-			m_pointLight.diffuseColor = { 0.4f,0.4f,1.0f,0.4f };
-		}
-
-		if (GetAsyncKeyState('4') & 0x1)
-		{
-			m_pointLight.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
-		}
-
-		//spotlight toggle
-		if (GetAsyncKeyState('5') & 0x1)
-		{
-			m_spotLight.diffuseColor = { 1.0f,0.4f,0.4f,0.4f };
-		}
-		if (GetAsyncKeyState('6') & 0x1)
-		{
-			m_spotLight.diffuseColor = { 1.0, 1.0f, 1.0f, 1.0f };
-		}
-
+		//setting up the constant buffers for three diff lights
 		m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
 		m_deviceContext->PSSetConstantBuffers(1, 1, &m_cBufferForPointLight);
 		m_deviceContext->PSSetConstantBuffers(2, 1, &m_cBufferForSpotLight);
-
 
 		//Ogre_model
 		stride = sizeof(SIMPLE_VERTEX);
@@ -1320,9 +1322,21 @@ bool D3D_DEMO::Run()
 		m_deviceContext->PSSetShaderResources(0, 1, &m_textureView);
 		//m_deviceContext->PSSetShaderResources(1, 1, &m_NormalMapView);
 		m_deviceContext->DrawIndexed(modelSize, 0, 0);
+		
+		// check for the button press
+		// if button()
+		//{
+		//		m_lightPointer = m_pixelShaderForTexture
+		// if button()
+		//{
+		//		m_lightPointer = m_pixelShaderForTextureNormal
+
+
+
 
 		// plane
 		m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
+		//m_deviceContext->PSSetShader(m_lightPointer, NULL, NULL);
 		m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
 		m_deviceContext->GSSetShader(NULL, NULL, NULL);
 		m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
@@ -1336,12 +1350,12 @@ bool D3D_DEMO::Run()
 	else
 	{
 		secondViewPort();
+		thirdViewPort();
 	}
 
 
-	m_SwapChain->Present(0, 0);
+	m_SwapChain->Present(1, 0);
 
-//	ReportLiveObjects();
 	return true;
 }
 
@@ -1353,154 +1367,15 @@ void D3D_DEMO::secondViewPort()
 	DXGI_SWAP_CHAIN_DESC m_swapChainDesc;
 	m_SwapChain->GetDesc(&m_swapChainDesc);
 
-	m_secondViewPort.Width = m_swapChainDesc.BufferDesc.Width * 0.5;
-	m_secondViewPort.Height = m_swapChainDesc.BufferDesc.Height * 0.5;
+	m_secondViewPort.Width = m_swapChainDesc.BufferDesc.Width * 0.5f;
+	m_secondViewPort.Height = m_swapChainDesc.BufferDesc.Height * 0.5f;
 	m_secondViewPort.MinDepth = 0.0f;
 	m_secondViewPort.MaxDepth = 1.0f;
 	m_secondViewPort.TopLeftX = 0;
 	m_secondViewPort.TopLeftY = 0;
 	
-	// Camera Movement
-	XMFLOAT3 vec3;
-
-
-	if (GetAsyncKeyState('W'))
-	{
-		temp.view.r[3].m128_f32[2] += 0.02f;
-	}
-
-	if (GetAsyncKeyState('S'))
-	{
-		temp.view.r[3].m128_f32[2] -= 0.02f;
-		//m_light.lightDirection.z -= 0.02f
-	}
-
-	if (GetAsyncKeyState('A'))
-	{
-		temp.view.r[3].m128_f32[0] -= 0.02f;
-	}
-
-	if (GetAsyncKeyState('D'))
-	{
-		temp.view.r[3].m128_f32[0] += 0.02f;
-	}
-
-	if (GetAsyncKeyState(VK_UP))
-	{
-		temp.view.r[3].m128_f32[1] += 0.02f;
-	}
-
-	if (GetAsyncKeyState(VK_DOWN))
-	{
-		temp.view.r[3].m128_f32[1] -= 0.02f;
-	}
-
-	//setting up the camera rotation
-	if (GetAsyncKeyState(VK_NUMPAD6))
-	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationY(0.02f), temp.view);
-	}
-
-	if (GetAsyncKeyState(VK_NUMPAD4))
-	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationY(-0.02f), temp.view);
-	}
-
-	vec3.x = temp.view.r[3].m128_f32[0];
-	vec3.y = temp.view.r[3].m128_f32[1];
-	vec3.z = temp.view.r[3].m128_f32[2];
-
-	temp.view.r[3].m128_f32[0] = 0;
-	temp.view.r[3].m128_f32[1] = 0;
-	temp.view.r[3].m128_f32[2] = 0;
-
-	if (GetAsyncKeyState('I'))
-	{
-		//m_light.diffuseColor.z += 0.10f;
-		m_light.lightDirection.z += 0.02f;
-	}
-	if (GetAsyncKeyState('K'))
-	{
-		//m_light.diffuseColor.z -= 0.10f;
-		m_light.lightDirection.z -= 0.02f;
-	}
-	if (GetAsyncKeyState('J'))
-	{
-		//m_light.diffuseColor.x -= 0.10f;
-		m_light.lightDirection.x -= 0.02f;
-	}
-	if (GetAsyncKeyState('L'))
-	{
-		//m_light.diffuseColor.x += 0.10f;
-		m_light.lightDirection.x += 0.02f;
-	}
-	//movement code for pointlight
-	if (GetAsyncKeyState('F'))
-	{
-		//m_light.diffuseColor.z += 0.10f;
-		m_pointLight.lightPos.z += 0.02f;
-	}
-	if (GetAsyncKeyState('V'))
-	{
-		//m_light.diffuseColor.z -= 0.10f;
-		m_pointLight.lightPos.z -= 0.02f;
-	}
-	if (GetAsyncKeyState('C'))
-	{
-		//m_light.diffuseColor.x -= 0.10f;
-		m_pointLight.lightPos.x -= 0.02f;
-	}
-	if (GetAsyncKeyState('B'))
-	{
-		//m_light.diffuseColor.x += 0.10f;
-		m_pointLight.lightPos.x += 0.02f;
-	}
-
-	//movement code for spotlight
-	if (GetAsyncKeyState('Y'))
-	{
-		m_spotLight.lightPosition.z += 0.02f;
-	}
-
-	if (GetAsyncKeyState('H'))
-	{
-		m_spotLight.lightPosition.z -= 0.02f;
-	}
-
-	if (GetAsyncKeyState('T'))
-	{
-		m_spotLight.lightPosition.x -= 0.02f;
-	}
-
-	if (GetAsyncKeyState('U'))
-	{
-		m_spotLight.lightPosition.x += 0.02f;
-	}
-
-
-
-	if (GetAsyncKeyState(VK_NUMPAD5))
-	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationX(-0.02f), temp.view);
-	}
-
-	if (GetAsyncKeyState(VK_NUMPAD8))
-	{
-		temp.view = XMMatrixMultiply(XMMatrixRotationX(0.02f), temp.view);
-	}
-
-	temp.view.r[3].m128_f32[0] = vec3.x;
-	temp.view.r[3].m128_f32[1] = vec3.y;
-	temp.view.r[3].m128_f32[2] = vec3.z;
-
-	skyboxWorld.r[3].m128_f32[0] = vec3.x;
-	skyboxWorld.r[3].m128_f32[1] = vec3.y;
-	skyboxWorld.r[3].m128_f32[2] = vec3.z;
 	//orientation of model
-	//toScene.proejctionMatrix = temp.projection;
 	toScene.proejctionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(60), m_secondViewPort.Width / m_secondViewPort.Height, SCREEN_NEAR, SCREEN_DEPTH);
-
-
 	//desc of camera
 	toScene.viewMatrix = XMMatrixInverse(NULL, temp.view);
 
@@ -1594,41 +1469,10 @@ void D3D_DEMO::secondViewPort()
 	m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
 	m_deviceContext->Draw(2, 0);
 
-	//directional toggle
-	if (GetAsyncKeyState('2') & 0x1)
-	{
-		m_light.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
-	}
-	if (GetAsyncKeyState('1') & 0x1)
-	{
-		m_light.diffuseColor = { 0.4f,1.0f,0.4f,0.4f };
-	}
-
-	//pointlight toggle
-	if (GetAsyncKeyState('3') & 0x1)
-	{
-		m_pointLight.diffuseColor = { 0.4f,0.4f,1.0f,0.4f };
-	}
-
-	if (GetAsyncKeyState('4') & 0x1)
-	{
-		m_pointLight.diffuseColor = { 1.0f,1.0f,1.0f,1.0f };
-	}
-
-	//spotlight toggle
-	if (GetAsyncKeyState('5') & 0x1)
-	{
-		m_spotLight.diffuseColor = { 1.0f,0.4f,0.4f,0.4f };
-	}
-	if (GetAsyncKeyState('6') & 0x1)
-	{
-		m_spotLight.diffuseColor = { 1.0, 1.0f, 1.0f, 1.0f };
-	}
-
+	//setting up the constant buffers for three diff lights
 	m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
 	m_deviceContext->PSSetConstantBuffers(1, 1, &m_cBufferForPointLight);
 	m_deviceContext->PSSetConstantBuffers(2, 1, &m_cBufferForSpotLight);
-
 
 	//Ogre_model
 	stride = sizeof(SIMPLE_VERTEX);
@@ -1651,7 +1495,148 @@ void D3D_DEMO::secondViewPort()
 	m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
 	m_deviceContext->PSSetShaderResources(1, 1, &m_SecondPlaneShaderView);
 	m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
+	m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
 
+}
+
+void D3D_DEMO::thirdViewPort()
+{
+	//rotation of the star
+	toObject.worldMatrix = XMMatrixMultiply(XMMatrixRotationY(XMConvertToRadians(5.0f)), toObject.worldMatrix);
+
+	DXGI_SWAP_CHAIN_DESC _swapChainDesc;
+	m_SwapChain->GetDesc(&_swapChainDesc);
+
+	m_thirdViewPort.Width = _swapChainDesc.BufferDesc.Width * 0.5;
+	m_thirdViewPort.Height = _swapChainDesc.BufferDesc.Height * 0.5;
+	m_thirdViewPort.MinDepth = 0.0f;
+	m_thirdViewPort.MaxDepth = 1.0f;
+	m_thirdViewPort.TopLeftX = m_thirdViewPort.Width;
+	m_thirdViewPort.TopLeftY = m_thirdViewPort.Height;
+
+
+	//orientation of model
+	toScene.proejctionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(60), m_thirdViewPort.Width / m_thirdViewPort.Height, SCREEN_NEAR, SCREEN_DEPTH);
+	//desc of camera
+	toScene.viewMatrix = XMMatrixInverse(NULL, m_tempForVP.view);
+
+	m_deviceContext->RSSetState(m_rasterState);
+	m_deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView);
+
+	m_deviceContext->RSSetViewports(1, &m_thirdViewPort);
+
+	float black[4] = { 0,0,0,0 };
+	//m_deviceContext->ClearRenderTargetView(m_renderTargetView, black);
+	m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	toObject.worldMatrix = m_tempForVP.view;
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSource;
+	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
+	SEND_TO_OBJECT *m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
+	*m_temp = toObject;
+	//memcpy(m_mapSource.pData, &toObject, sizeof(&toObject));
+	m_deviceContext->Unmap(m_cBuffer[0], 0);
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSource2;
+	m_deviceContext->Map(m_cBuffer[1], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource2);
+	SEND_TO_SCENE *temp2 = ((SEND_TO_SCENE*)m_mapSource2.pData);
+	*temp2 = toScene;
+	//memcpy(m_mapSource2.pData, &toScene, sizeof(&toScene));
+	m_deviceContext->Unmap(m_cBuffer[1], 0);
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSourceForLight;
+	m_deviceContext->Map(m_cBufferForLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForLight);
+	LIGHT_VERTEX *m_Light = ((LIGHT_VERTEX*)m_mapSourceForLight.pData);
+	*m_Light = m_light;
+	//memcpy(m_mapSourceForLight.pData, &m_light, sizeof(&m_light));
+	m_deviceContext->Unmap(m_cBufferForLight, 0);
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSourceForPointLight;
+	m_deviceContext->Map(m_cBufferForPointLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForPointLight);
+	POINT_LIGHT_VERTEX *m_PointLight = ((POINT_LIGHT_VERTEX*)m_mapSourceForPointLight.pData);
+	*m_PointLight = m_pointLight;
+	//memcpy(m_mapSourceForPointLight.pData, &m_pointLight, sizeof(&m_pointLight));
+	m_deviceContext->Unmap(m_cBufferForPointLight, 0);
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSourceForSpotLight;
+	m_deviceContext->Map(m_cBufferForSpotLight, 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSourceForSpotLight);
+	SPOT_LIGHT_VERTEX *m_SpotLight = ((SPOT_LIGHT_VERTEX*)m_mapSourceForSpotLight.pData);
+	*m_SpotLight = m_spotLight;
+	//memcpy(m_mapSourceForSpotLight.pData, &m_spotLight, sizeof(&m_spotLight));
+	m_deviceContext->Unmap(m_cBufferForSpotLight, 0);
+
+	unsigned int stride = sizeof(SIMPLE_VERTEX);
+	unsigned int offsets = 0;
+
+	//skybox
+	m_deviceContext->RSSetState(m_rasterForSkybox);
+	m_deviceContext->VSSetShader(m_vertexShader, NULL, NULL);
+	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->PSSetShader(m_pixelShaderForSkybox, NULL, NULL);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_skyboxVertexBuffer, &stride, &offsets);
+	m_deviceContext->IASetIndexBuffer(m_skyboxIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_deviceContext->IASetInputLayout(m_layout);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_SkyBoxShaderView);
+	m_deviceContext->PSSetSamplers(0, 1, &m_sampleTexture);
+	m_deviceContext->DrawIndexed(modelSizeForSkybox, 0, 0);
+
+	m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+
+	//star
+	toObject.worldMatrix = XMMatrixIdentity();
+	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
+	m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
+	*m_temp = toObject;
+	m_deviceContext->Unmap(m_cBuffer[0], 0);
+
+	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_matrixBuffer, &stride, &offsets);
+	m_deviceContext->PSSetShader(m_pixelShader, NULL, NULL);
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
+	m_deviceContext->IASetIndexBuffer(m_iBuffer, DXGI_FORMAT_R32_UINT, 0);
+	m_deviceContext->DrawIndexed(60, 0, 0);
+
+	//drawing for the quad through geometry shader
+	stride = sizeof(GEO_VERTEX);
+	m_deviceContext->VSSetShader(m_vertexShaderForGeometry, NULL, NULL);
+	m_deviceContext->PSSetShader(m_pixelShaderForGeometry, NULL, NULL);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_vertexBufferForGeometry, &stride, &offsets);
+	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+	m_deviceContext->IASetInputLayout(m_layoutForGeometryShader);
+	m_deviceContext->GSSetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
+	m_deviceContext->Draw(2, 0);
+
+	//setting up the constant buffers for three diff lights
+	m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
+	m_deviceContext->PSSetConstantBuffers(1, 1, &m_cBufferForPointLight);
+	m_deviceContext->PSSetConstantBuffers(2, 1, &m_cBufferForSpotLight);
+
+	//Ogre_model
+	stride = sizeof(SIMPLE_VERTEX);
+	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
+	m_deviceContext->IASetInputLayout(m_layout);
+	m_deviceContext->VSSetShader(m_vertexShader, NULL, NULL);
+	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
+	m_deviceContext->IASetIndexBuffer(m_modelIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_modelVertexBuffer, &stride, &offsets);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_textureView);
+	m_deviceContext->DrawIndexed(modelSize, 0, 0);
+
+	// plane
+	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->PSSetShader(m_pixelShaderForTexture, NULL, NULL);
+	m_deviceContext->GSSetShader(NULL, NULL, NULL);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
+	m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
+	m_deviceContext->PSSetShaderResources(1, 1, &m_SecondPlaneShaderView);
+	m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
+	m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
 }
 
 void D3D_DEMO::ReportLiveObjects()

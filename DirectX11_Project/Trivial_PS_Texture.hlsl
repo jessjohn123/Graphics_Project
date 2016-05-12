@@ -1,5 +1,5 @@
-#pragma pack_matrix(row_major)
-//#include "LightingCalcs.hlsli"
+//#pragma pack_matrix(row_major)
+#include "LightingCalcs.hlsli"
 
 SamplerState SampleType;
 Texture2D diffuseTexture : register(t0);
@@ -51,7 +51,6 @@ float4 main(PS_IN input) : SV_TARGET
 	float4 color, color1, color2;
 	float4 blendColorTogether;
 
-
 	//Sample the pixel color from the texture using the sampler at this texture coordinate location.
 	textureColor = diffuseTexture.Sample(SampleType, input.tex);
 
@@ -65,18 +64,18 @@ float4 main(PS_IN input) : SV_TARGET
 		finalTextures = textureColor * combineTwoTextures;
 	}
 
-	// Directional Light Cal
-	//dot product btw normal vector & the light dir
+	 /*Directional Light Cal*/
+	/*//dot product btw normal vector & the light dir
 	lightDir = -lightDirection;
 
 	//amt of light on pixel
 	lightIntensity = saturate(dot(input.normal, lightDir));
 
 	//diffuse color combined with light intensity
-	color = saturate(diffuseColor * lightIntensity);
+	color = saturate(diffuseColor * lightIntensity);*/
 
-	//Point Light Cal
-	lightDirForPointLight = normalize(lightPosForPointLight.xyz - input.posW.xyz);
+	/*Point Light Cal*/
+	/*lightDirForPointLight = normalize(lightPosForPointLight.xyz - input.posW.xyz);
 
 	lightRatioForPointLight = saturate(dot(lightDirForPointLight, input.normal));
 
@@ -84,11 +83,10 @@ float4 main(PS_IN input) : SV_TARGET
 
 	Attenuation = 1.0 - saturate(length((lightPosForPointLight.xyz - input.posW.xyz) / radius));
 
-	color1 *= Attenuation;
+	color1 *= Attenuation;*/
 
-	//Spot Light Cal
-
-	lightDirForSpotLight = normalize(LightPosForSpotLight - input.posW.xyz);
+	/*Spot Light Cal*/
+	/*lightDirForSpotLight = normalize(LightPosForSpotLight - input.posW.xyz);
 
 	SpotLightSurfaceRatio = saturate(dot(-lightDirForSpotLight, ConeDirection));
 
@@ -96,16 +94,18 @@ float4 main(PS_IN input) : SV_TARGET
 
 	SpotLightRatio = saturate(dot(lightDirForSpotLight, input.normal));
 
-	color2 = SpotLightRatio * SpotLightColor * SpotFactor;
+	color2 = SpotLightRatio * SpotLightColor * SpotFactor;*/
 	
 	// trying implement through function
-	/*color.xyz = CalDirectionlLight(lightDir, diffuseColor.xyz, input.normal);
-	color.w = 1.0f;
+	lightDir = -lightDirection;
+	color = CalDirectionlLight(lightDirection, diffuseColor, input.normal);
+	//color.w = 1.0f;
 
-	color1.xyz = CalPointLight(lightPosForPointLight.xyz, diffuseColorForPointLight.xyz, input.normal, input.posW, radius);
-	color1.w = 1.0f;
+	color1 = CalPointLight(lightPosForPointLight, diffuseColorForPointLight, input.normal, input.posW, radius);
+	//color1.w = 1.0f;
 
-	color2.xyz = CalSpotLight(LightPosForSpotLight.xyz, SpotLightColor.xyz, ConeDirection, ConeRatio, input.normal, input.posW);*/
+	color2 = CalSpotLight(LightPosForSpotLight, SpotLightColor, ConeDirection, ConeRatio, input.normal, input.posW);
+	
 	//multiply the texture pixel and the final diffuse color
 	//color = color * textureColor;
 

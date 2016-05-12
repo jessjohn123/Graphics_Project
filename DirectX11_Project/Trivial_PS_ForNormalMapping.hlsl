@@ -1,4 +1,5 @@
 #pragma pack_matrix(row_major)
+//#include "LightingCalcs.hlsi"
 
 SamplerState SampleType;
 Texture2D m_textureColor : register(t0);
