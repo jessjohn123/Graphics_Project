@@ -3,8 +3,8 @@
 struct V_IN
 {
 	float4 posL : POSITION;
-	float2 tex : TEXTURE;
 	float4 color : COLOR;
+	float2 tex : TEXTURE;
 	float3 normal : NORMAL;
 	float3 tangent : TANGENT;
 };
@@ -17,7 +17,6 @@ struct V_OUT
 	float4 m_localCoord : COORD;
 	float4 posW : WPOSITION;
 	float3 tangent : TANGENT;
-	float3x3 TBN : TBN;
 };
 cbuffer OBJECT : register(b0)
 {
@@ -54,13 +53,13 @@ V_OUT main(V_IN input)
 	output.posW = mul(input.posL, worldMatrix);
 
 	//Cross product helps in finding the perpendicular vec of our TBN matrix
-	output.TBN[0] = mul(input.tangent, (float3x3)worldMatrix);
-	output.TBN[1] = mul(cross(input.normal, input.tangent), (float3x3)worldMatrix);
-	output.TBN[2] = mul(input.normal, (float3x3)worldMatrix);
+	//output.TBN[0] = mul(float4(normalize(input.tangent), 0), worldMatrix).xyz;
+	//output.TBN[1] = mul(float4(cross(normalize(input.normal), normalize(input.tangent)), 0), worldMatrix).xyz;
+	//output.TBN[2] = mul(float4(normalize(input.normal), 0), worldMatrix).xyz;
 
 	////cal the tangent vec against the world matrix
-	//output.tangent = mul(input.tangent, (float3x3)worldMatrix);
-	//output.tangent = normalize(output.tangent);
+	output.tangent = mul(input.tangent, (float3x3)worldMatrix);
+	output.tangent = normalize(output.tangent);
 
 	////cal the bi-normal vec against the world matrix 
 	//output.binormal = mul(input.binormal, (float3x3)worldMatrix);

@@ -87,7 +87,7 @@
     <Image Include="Textures\brickwall.jpg">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="DirectX11_Project\Textures\NormalMap (1).jpg">
+    <Image Include="Textures\NormalMap (1).jpg">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

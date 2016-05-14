@@ -1,5 +1,5 @@
-#pragma pack_matrix(row_major)
-//#include "LightingCalcs.hlsi"
+//#pragma pack_matrix(row_major)
+#include "LightingCalcs.hlsli"
 
 SamplerState SampleType;
 Texture2D m_textureColor : register(t0);
@@ -12,6 +12,13 @@ cbuffer DirectionalLightBuffer : register(b0)
 	float padding;
 };
 
+cbuffer PointLightBuffer : register(b1)
+{
+	float4 diffuseColorForPointLight;
+	float3 lightPosForPointLight;
+	float radius;
+};
+
 struct PS_IN
 {
 	float4 posH : SV_POSITION;
@@ -21,14 +28,16 @@ struct PS_IN
 	float4 m_localCoord : COORD;
 	float4 posW : WPOSITION;
 	float3 tangent : TANGENT;
-	float3x3 TBN : TBN;
+
 };
 
 float4 main(PS_IN input) : SV_TARGET
 {
-	float4 textureColor, NormalMapColor, color;
+	float4 textureColor, NormalMapColor;
 	float3 lightDir, normMap;
 	float lightIntensity;
+
+	float4 color, color1;
 
 	//sample the texture pixel at this location
 	textureColor = m_textureColor.Sample(SampleType, input.tex);
@@ -37,23 +46,37 @@ float4 main(PS_IN input) : SV_TARGET
 	NormalMapColor = m_textureForNormalMap.Sample(SampleType, input.tex);
 
 	//expanding the range of the normal val from(0, +1) to (-1, +1).
-	normMap.xyz = normalize((normMap.xyz * 2.0f) - 1.0f);
+	//normMap.xyz = normalize((normMap.xyz * 2.0f) - 1.0f);
+	NormalMapColor = (NormalMapColor * 2.0f) - 1.0f;
+	//NormalMapColor.y = -NormalMapColor.y;
+
+	// create the tbn matrix
+	float3x3 TBN;
+	TBN[0] = input.tangent;
+	TBN[1] = cross(float4(input.normal, 0), float4(input.tangent, 0));
+	TBN[2] = input.normal;
+
+	//TBN[0] = float3(1.0f, 0.0f, 0.0f);
+	//TBN[1] = float3(0.0, 0.0f, 1.0f);
+	//TBN[2] = float3(0.0f, 1.0f, 0.0f);
 
 	//cal the bump normal from the data in the normal map
-	normMap.xyz = mul(normMap.xyz, input.TBN);
+	//normMap.xyz = mul(normMap.xyz, input.TBN);
+	normMap = mul(NormalMapColor.xyz, TBN);
 
+	//Normalize the resulting bump normal 
+	normMap = normalize(normMap);
 
-	//Invert the light dir for cal
+    //dot product btw normal vec & the light dir
 	lightDir = -lightDirection;
 
-	//Cal the mt of light on this pixel based on the normal map normal val
-	lightIntensity = saturate(dot(normMap, lightDir));
+	//Using the Directional Cals Func
+	color = CalDirectionlLight(lightDirection, diffuseColor, normMap);
+	color1 = CalPointLight(lightPosForPointLight, diffuseColorForPointLight, normMap, input.posW, radius);
 
-	//Determine the final diffuse color based on the diffuse color and the amt of light of light intensity
-	color = saturate(diffuseColor * lightIntensity);
 
 	//Combine the final normal light color with the texture color
-	color = color * textureColor;
+	color = color1/* * textureColor*/;
 
-	return textureColor;
+	return color;
 }
