@@ -264,6 +264,7 @@
     <Image Include="Textures\brickwall.jpg" />
     <Image Include="Textures\DSC_4439.jpg" />
     <Image Include="Textures\NormalMap (1).jpg" />
+    <Image Include="Textures\Seamless ground sand texture (5).jpg" />
   </ItemGroup>
   <ItemGroup>
     <None Include="LightingCalcs.hlsli" />

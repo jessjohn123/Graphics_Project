@@ -113,8 +113,10 @@ class D3D_DEMO
 	ID3D11Device *m_device;
 	ID3D11DeviceContext* m_deviceContext;
 	ID3D11RenderTargetView* m_renderTargetView;
+	ID3D11RenderTargetView* m_renderTarView;
 	ID3D11Texture2D* m_depthStencilBuffer;
 	ID3D11DepthStencilView* m_depthStencilView;
+	ID3D11DepthStencilView* m_depthStencilViewForRenderToScene;
 	ID3D11DepthStencilState* m_depthStencilState;
 	ID3D11RasterizerState* m_rasterState;
 	ID3D11RasterizerState* m_rasterForSkybox;
@@ -169,8 +171,12 @@ class D3D_DEMO
 	ID3D11ShaderResourceView *m_SkyBoxShaderView;
 	ID3D11ShaderResourceView *m_NullShaderView = NULL;
 	ID3D11ShaderResourceView *m_NormalMapView;								// Normal Map shader resource
+	ID3D11ShaderResourceView *m_secondNormalMapView;
 	ID3D11ShaderResourceView *m_shaderResourcePointerForNM;
+	ID3D11ShaderResourceView *m_shaderForRenderToScene;
 	ID3D11Texture2D *m_secondTexture;
+	ID3D11Texture2D *m_texToRenderToScene;
+	ID3D11Texture2D *m_secondTexToRenderToScene;
 	ID3D11ShaderResourceView *m_SecondPlaneShaderView;
 	ID3D11SamplerState *m_sampleTexture;
 	XMMATRIX skyboxWorld;
@@ -203,6 +209,7 @@ public:
 	void ResizingOfWindows();
 	void secondViewPort();
 	void thirdViewPort();
+	void RenderToScene();
 	void CreateTangents(SIMPLE_VERTEX* model, UINT numIndicies);
 };
 
@@ -262,6 +269,14 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	D3D11_SUBRESOURCE_DATA m_constantDataForSpotLight = {};
 	D3D11_BUFFER_DESC m_vertexBufferDescForGeometry = {};
 	D3D11_SUBRESOURCE_DATA m_vertexDataForGeometry = {};
+
+	//Render the scene to the texture
+	D3D11_TEXTURE2D_DESC texDescForRenderToScene;
+	D3D11_TEXTURE2D_DESC secondTexDescForRenderToScene;
+	D3D11_RENDER_TARGET_VIEW_DESC renderTargetViewForRenderToScene = {};
+	D3D11_SHADER_RESOURCE_VIEW_DESC shaderResViewDescForRenderToScene = {};
+	D3D11_DEPTH_STENCIL_VIEW_DESC d_stencilForRenderToScene = {};
+
 
 	swapChainDesc.BufferDesc.Width = BACKBUFFER_WIDTH;
 	swapChainDesc.BufferDesc.Height = BACKBUFFER_HEIGHT;
@@ -932,6 +947,56 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateRasterizerState(&m_RasterDesc, &m_rasterState);
 
+	//setting up the desc for the first texture(color) for rendering to the scene
+	ZeroMemory(&texDescForRenderToScene, sizeof(texDescForRenderToScene));
+	texDescForRenderToScene.Width = BACKBUFFER_WIDTH;
+	texDescForRenderToScene.Height = BACKBUFFER_HEIGHT;
+	texDescForRenderToScene.Usage = D3D11_USAGE_DEFAULT;
+	texDescForRenderToScene.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	texDescForRenderToScene.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	texDescForRenderToScene.MipLevels = 1;
+	texDescForRenderToScene.ArraySize = 1;
+	texDescForRenderToScene.SampleDesc.Count = 4;
+	texDescForRenderToScene.CPUAccessFlags = 0;
+	texDescForRenderToScene.MiscFlags = 0;
+	m_device->CreateTexture2D(&texDescForRenderToScene, NULL, &m_texToRenderToScene);
+
+	//For the depth texture 
+	ZeroMemory(&secondTexDescForRenderToScene, sizeof(secondTexDescForRenderToScene));
+	secondTexDescForRenderToScene.Width = BACKBUFFER_WIDTH;
+	secondTexDescForRenderToScene.Height = BACKBUFFER_HEIGHT;
+	secondTexDescForRenderToScene.Usage = D3D11_USAGE_DEFAULT;
+	secondTexDescForRenderToScene.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	secondTexDescForRenderToScene.Format = DXGI_FORMAT_D32_FLOAT;
+	secondTexDescForRenderToScene.MipLevels = 1;
+	secondTexDescForRenderToScene.ArraySize = 1;
+	secondTexDescForRenderToScene.SampleDesc.Count = 4;
+	secondTexDescForRenderToScene.CPUAccessFlags = 0;
+	secondTexDescForRenderToScene.MiscFlags = 0;
+	m_device->CreateTexture2D(&secondTexDescForRenderToScene, NULL, &m_secondTexToRenderToScene);
+
+
+	//setting up the desc for the depth stencil view
+	d_stencilForRenderToScene.Format = DXGI_FORMAT_D32_FLOAT;
+	d_stencilForRenderToScene.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+	d_stencilForRenderToScene.Texture2D.MipSlice = 0;
+	m_device->CreateDepthStencilView(m_texToRenderToScene, NULL, &m_depthStencilViewForRenderToScene);
+	
+	//setting up the render target view for rendering the scene 
+	renderTargetViewForRenderToScene.Format = texDescForRenderToScene.Format;
+	renderTargetViewForRenderToScene.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+	renderTargetViewForRenderToScene.Texture2D.MipSlice = 0;
+	m_device->CreateRenderTargetView(m_texToRenderToScene,NULL, &m_renderTarView);
+
+
+	//setting up the shader resource view for rendering the scene
+	shaderResViewDescForRenderToScene.Format = texDescForRenderToScene.Format;
+	shaderResViewDescForRenderToScene.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	shaderResViewDescForRenderToScene.Texture2D.MostDetailedMip = 0;
+	shaderResViewDescForRenderToScene.Texture2D.MipLevels = 1;
+	m_device->CreateShaderResourceView(m_texToRenderToScene, NULL, &m_shaderForRenderToScene);
+
+
 	//passing info inside the dds texture loader
 	CreateDDSTextureFromFile(m_device, L"OgreTextures/SkinColorMostro_COLOR.dds", NULL, &m_textureView);
 	//CreateDDSTextureFromFile(m_device, NULL, NULL, &m_NullShaderView);
@@ -943,6 +1008,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	CreateDDSTextureFromFile(m_device, L"mp_rip/OutputCube.dds", NULL, &m_SkyBoxShaderView);
 	//setting up desc for loading normal map texture
 	CreateDDSTextureFromFile(m_device, L"Textures/NormalMap (1).dds", NULL, &m_NormalMapView);
+	//CreateDDSTextureFromFile();
 
 
 	//raster desc for skybox
@@ -1423,6 +1489,7 @@ bool D3D_DEMO::Run()
 		//m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
 		m_deviceContext->PSSetShaderResources(0, 1, &m_SecondPlaneShaderView);
 		m_deviceContext->PSSetShaderResources(1, 1, &m_NormalMapView);
+		//m_deviceContext->PSSetShaderResources(2, 1, &m_secondNormalMapView);
 		//m_deviceContext->PSSetShaderResources(0, 1, &m_shaderResourcePointerForNM);
 		//m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM);
 		m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
@@ -1441,6 +1508,23 @@ bool D3D_DEMO::Run()
 	return true;
 }
 
+void D3D_DEMO::RenderToScene()
+{
+	//desc of cam
+	toScene.viewMatrix = XMMatrixInverse(NULL, temp.view);
+
+	m_deviceContext->RSSetState(m_rasterState);
+	m_deviceContext->OMSetRenderTargets(1, &m_renderTarView, m_depthStencilViewForRenderToScene);
+
+	m_deviceContext->RSSetViewports(1, &m_viewport);
+
+	float blue[4] = { 0, 0, 1, 0 };
+	m_deviceContext->ClearRenderTargetView(m_renderTarView, blue);
+	m_deviceContext->ClearDepthStencilView(m_depthStencilViewForRenderToScene, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	toObject.worldMatrix = skyboxWorld;
+
+}
 void D3D_DEMO::secondViewPort()
 {
 	//rotation of the star
@@ -1779,6 +1863,7 @@ bool D3D_DEMO::ShutDown()
 	SAFE_RELEASE(m_SkyBoxShaderView);
 	//SAFE_RELEASE(m_shaderResourcePointerForNM);
 	SAFE_RELEASE(m_NormalMapView);
+	//SAFE_RELEASE(m_secondNormalMapView);
 //	m_NullShaderView->Release();
 	SAFE_RELEASE(m_secondTexture);
 	SAFE_RELEASE(m_SecondPlaneShaderView);
