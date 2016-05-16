@@ -1,24 +1,10 @@
-*.sdf
+Release
+Debug
+x64
+ipch
 *.suo
+*.sdf
+*.db
+*.opensdf
+*.user
 
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-
-# Compiled Static libraries
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-Debug/
