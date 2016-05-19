@@ -76,6 +76,12 @@
     <FxCompile Include="Trivial_PS_ForNormalMapping.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="Trivial_VS_ForTransparency.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="Trivial_PS_ForTransparency.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="OgreTextures\SkinColorMostro_COLOR.png">

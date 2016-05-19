@@ -4,12 +4,14 @@ struct V_IN
 {
 	float4 posL : POSITION;
 	float4 color : COLOR;
+	
 };
 
 struct V_OUT
 {
 	float4 posH : SV_POSITION;
 	float4 color : COLOR;
+	
 };
 
 cbuffer OBJECT : register(b0)
@@ -37,7 +39,7 @@ V_OUT main(V_IN input)
 	//localH = mul(localH, projectionMatrix);
 
 	output.posH = localH;
-
+	//output.uv = input.uv;
 	output.color = input.color;
 
 	return output;

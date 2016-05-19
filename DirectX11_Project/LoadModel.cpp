@@ -88,5 +88,14 @@ bool LoadMesh::LoadObj(const char * path, std::vector<float3>& v_ForModel, std::
 
 	fin.close();
 
+
+
+
+	//saving out as binary file
+
+	
+
+
+
 	return true;
 }

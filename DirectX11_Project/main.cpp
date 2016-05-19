@@ -9,17 +9,20 @@
 #include <vector>
 #include "Define.h"
 #include "Trivial_VS.csh"
+#include "Trivial_VS_ForGeometry.csh"
+#include "Trivial_VS_ForNormalMapping.csh"
+#include "Trivial_VS_ForTransparency.csh"
 #include "Trivial_PS.csh"
 #include "Trivial_PS_Texture.csh"
 #include "Trivial_PS_For_Skybox.csh"
-#include "Trivial_GS.csh"
-#include "Trivial_VS_ForGeometry.csh"
 #include "Trivial_PS_ForGeometry.csh"
-#include "Trivial_VS_ForNormalMapping.csh"
 #include "Trivial_PS_ForNormalMapping.csh"
+#include "Trivial_PS_ForTransparency.csh"
+#include "Trivial_GS.csh"
 #include "LoadModel.h"
 #include "DDSTextureLoader.h"
 #include "XTime.h"
+#include <thread>
 
 using namespace DirectX;
 
@@ -153,16 +156,16 @@ class D3D_DEMO
 	MatrixBufferType temp;
 	MatrixBufferType m_tempForVP;
 	SIMPLE_VERTEX* m_model;
-	unsigned int *vert_indices, *text_indices, *norm_indices;
+	
 	LoadMesh loadObj;
 	unsigned int modelSize;
 	ID3D11Buffer *m_modelVertexBuffer, *m_modelIndexBuffer;
 	SIMPLE_VERTEX* m_skyModel;
-	unsigned int *m_vert, *m_text, *m_norm;
+	
 	unsigned int modelSizeForSkybox;
 	ID3D11Buffer * m_skyboxVertexBuffer, *m_skyboxIndexBuffer;
 	SIMPLE_VERTEX* m_planeModel;
-	unsigned int *m_vertForPlane, *m_textForPlane, *m_normForPlane;
+	
 	unsigned int modelSizeForPlane;
 	ID3D11Buffer *m_planeVertexBuffer, *m_planeIndexBuffer;
 	ID3D11Texture2D *m_texture;
@@ -171,7 +174,8 @@ class D3D_DEMO
 	ID3D11ShaderResourceView *m_SkyBoxShaderView;
 	ID3D11ShaderResourceView *m_NullShaderView = NULL;
 	ID3D11ShaderResourceView *m_NormalMapView;								// Normal Map shader resource
-	ID3D11ShaderResourceView *m_secondNormalMapView;
+	ID3D11ShaderResourceView *m_GeoShaderView = NULL;
+	//ID3D11ShaderResourceView *m_secondNormalMapView;
 	ID3D11ShaderResourceView *m_shaderResourcePointerForNM;
 	ID3D11ShaderResourceView *m_shaderForRenderToScene;
 	ID3D11Texture2D *m_secondTexture;
@@ -196,6 +200,13 @@ class D3D_DEMO
 	bool bSplitScreen;
 	XTime time;
 
+	//For Transparency 
+	//ID3D11Buffer *m_cBufferForTransparency[2];
+	ID3D11VertexShader *m_vShaderForTransparency;
+	ID3D11PixelShader *m_pShaderForTransparency;
+	ID3D11InputLayout *m_layoutForTransparency;
+	
+
 	unsigned int indices[60] = { 0,1,10,1,2,10,2,3,10,3,4,10,4,5,10,5,6,10,6,7,10,7,8,10,8,9,10,9,0,10,
 		0,9,11,9,8,11,8,7,11,7,6,11,6,5,11,5,4,11,4,3,11,3,2,11,2,1,11,1,0,11 };
 
@@ -211,6 +222,13 @@ public:
 	void thirdViewPort();
 	void RenderToScene();
 	void CreateTangents(SIMPLE_VERTEX* model, UINT numIndicies);
+	void LoadTheModel();
+	void LoadTheGround();
+	void LoadTheSkyBox();
+	void RenderTransparency();
+
+	void SaveBinary(const char* _file, const vector<SIMPLE_VERTEX> _vertices, const vector<UINT> _indices);
+	bool LoadBinary(const char* _file, vector<SIMPLE_VERTEX>& _vertices, vector<UINT>& _indices);
 };
 
 void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
@@ -269,6 +287,10 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	D3D11_SUBRESOURCE_DATA m_constantDataForSpotLight = {};
 	D3D11_BUFFER_DESC m_vertexBufferDescForGeometry = {};
 	D3D11_SUBRESOURCE_DATA m_vertexDataForGeometry = {};
+
+	//For Transaprency
+	//D3D11_BUFFER_DESC m_constBufferForTransparency = {};
+	//D3D11_SUBRESOURCE_DATA m_constDataForTransparency = {};
 
 	//Render the scene to the texture
 	D3D11_TEXTURE2D_DESC texDescForRenderToScene;
@@ -358,6 +380,25 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	ver_of_star[11].position.z = 0.25f;
 	ver_of_star[11].color = RED_COLOR;
 
+	//Loading through single thread
+
+	vector<thread>loadingThreads;
+	
+	loadingThreads.push_back(thread(&D3D_DEMO::LoadTheModel, this));
+	loadingThreads.push_back(thread(&D3D_DEMO::LoadTheGround, this));
+	loadingThreads.push_back(thread(&D3D_DEMO::LoadTheSkyBox, this));
+
+	size_t count = loadingThreads.size();
+
+	for (int i = 0; i < count; i++)
+	{
+		loadingThreads[i].join();
+	}
+
+	loadingThreads.clear();
+
+	//Loading the ogre model
+/*
 	//loading the 3D-model: Ogre
 	std::vector<float3> vert_vertices, norm_vertices;
 	std::vector<float2> text_vertices;
@@ -394,58 +435,6 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 		m_model[j].normal.y = norm_vertices[norm_indices[j]].y;
 		m_model[j].normal.z = norm_vertices[norm_indices[j]].z;
 	}
-
-
-	// create tangents here
-
-	/*for (unsigned int j = 0; j < indicesForV.size(); j += 3)
-	{
-		// find the 3 verts that pertain to this triangle
-		SIMPLE_VERTEX v1 = m_model[j];
-		SIMPLE_VERTEX v2 = m_model[j+1];
-		SIMPLE_VERTEX v3 = m_model[j+2];
-
-		SIMPLE_VERTEX edge1, edge2;
-		edge1.position.x = v2.position.x - v1.position.x;
-		edge1.position.y = v2.position.y - v1.position.y;
-		edge1.position.z = v2.position.z - v1.position.z;
-
-		edge2.position.x = v3.position.x - v2.position.x;
-		edge2.position.y = v3.position.y - v2.position.y;
-		edge2.position.z = v3.position.z - v2.position.z;
-
-		SIMPLE_VERTEX t1 = m_model[j];
-		SIMPLE_VERTEX t2 = m_model[j+1];
-
-		SIMPLE_VERTEX TexEdge1, TexEdge2;
-		TexEdge1.texture.x = t2.texture.x - t1.texture.x;
-		TexEdge1.texture.y = t2.texture.y - t1.texture.y;
-
-		TexEdge2.texture.x = t2.texture.x - t1.texture.x;
-		TexEdge2.texture.y = t2.texture.y - t1.texture.y;
-
-		// do the fancy math in the powerpoint slides
-		float ratio;
-		XMVECTOR dotResult, Tangent;
-		ratio = 1.0f / (TexEdge1.position.x * TexEdge2.position.y - TexEdge2.position.x * TexEdge1.position.y);
-
-		XMFLOAT3 uDirection, vDirection;
-		uDirection = XMFLOAT3(((TexEdge2.position.y * edge1.position.x - TexEdge1.position.y * edge2.position.x) * ratio),
-							  ((TexEdge2.position.y * edge1.position.y - TexEdge1.position.y * edge2.position.y) * ratio),
-							  ((TexEdge2.position.y * edge1.position.z - TexEdge1.position.y * edge2.position.z) * ratio));
-
-		vDirection = XMFLOAT3(((TexEdge1.position.x * edge2.position.x - TexEdge2.position.x * edge1.position.x) * ratio),
-							  ((TexEdge1.position.x * edge2.position.y - TexEdge2.position.x * edge1.position.y) * ratio),
-							  ((TexEdge1.position.x * edge2.position.z - TexEdge2.position.x * edge1.position.z) * ratio));
-		
-		// insert the value you found (tangent) into the vector of SIMPLE_VERTEX
-		XMVECTOR normal = XMVectorSet(m_model[j].normal.x, m_model[j].normal.y, m_model[j].normal.z, 0.0f);
-		XMVECTOR uDir = XMVectorSet(uDirection.x, uDirection.y, uDirection.z, 0.0f);
-		 dotResult = XMVector3Dot(normal, uDir);
-		 Tangent = uDir - normal * dotResult.m128_f32[0];
-	}*/
-
-	
 
 	//setting up model vertex buffer
 	D3D11_BUFFER_DESC modelVertDesc;
@@ -485,10 +474,12 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	text_vertices.clear();
 	indicesForV.clear();
 	indicesForT.clear();
-	indicesForN.clear();
+	indicesForN.clear();*/
+
+	//LoadTheModel();
 
 	//loading the plane
-	loadObj.LoadObj("Plane.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
+	/*loadObj.LoadObj("Plane.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
 
 	m_vertForPlane = new unsigned int[indicesForV.size()];
 	m_textForPlane = new unsigned int[indicesForT.size()];
@@ -521,57 +512,6 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 		m_planeModel[j].normal.y = norm_vertices[m_normForPlane[j]].y;
 		m_planeModel[j].normal.z = norm_vertices[m_normForPlane[j]].z;
 	}
-
-	// m_model -> model
-	/*for (unsigned int j = 0; j < indicesForV.size(); j += 3)
-	{
-		// find the 3 verts that pertain to this triangle
-		SIMPLE_VERTEX vert1 = m_model[j];
-		SIMPLE_VERTEX vert2 = m_model[j + 1];
-		SIMPLE_VERTEX vert3 = m_model[j + 2];
-
-		SIMPLE_VERTEX Edge1, Edge2;
-		Edge1.position.x = vert2.position.x - vert1.position.x;
-		Edge1.position.y = vert2.position.y - vert1.position.y;
-		Edge1.position.z = vert2.position.z - vert1.position.z;
-
-		Edge2.position.x = vert3.position.x - vert2.position.x;
-		Edge2.position.y = vert3.position.y - vert2.position.y;
-		Edge2.position.z = vert3.position.z - vert2.position.z;
-
-		SIMPLE_VERTEX text1 = m_model[j];
-		SIMPLE_VERTEX text2 = m_model[j + 1];
-
-		SIMPLE_VERTEX TextEdge1, TextEdge2;
-		TextEdge1.texture.x = text2.texture.x - text1.texture.x;
-		TextEdge1.texture.y = text2.texture.y - text1.texture.y;
-
-		TextEdge2.texture.x = text2.texture.x - text1.texture.x;
-		TextEdge2.texture.y = text2.texture.y - text1.texture.y;
-
-		// do the fancy math in the powerpoint slides
-		float m_ratio;
-		XMVECTOR m_dotResult, m_Tangent;
-		m_ratio = 1.0f / (TextEdge1.position.x * TextEdge2.position.y - TextEdge2.position.x * TextEdge1.position.y);
-
-		XMFLOAT3 uDir, vDir;
-		uDir = XMFLOAT3(((TextEdge2.position.y * Edge1.position.x - TextEdge1.position.y * Edge2.position.x) * m_ratio),
-			((TextEdge2.position.y * Edge1.position.y - TextEdge1.position.y * Edge2.position.y) * m_ratio),
-			((TextEdge2.position.y * Edge1.position.z - TextEdge1.position.y * Edge2.position.z) * m_ratio));
-
-		vDir = XMFLOAT3(((TextEdge1.position.x * Edge2.position.x - TextEdge2.position.x * Edge1.position.x) * m_ratio),
-			((TextEdge1.position.x * Edge2.position.y - TextEdge2.position.x * Edge1.position.y) * m_ratio),
-			((TextEdge1.position.x * Edge2.position.z - TextEdge2.position.x * Edge1.position.z) * m_ratio));
-
-		// insert the value you found (tangent) into the vector of SIMPLE_VERTEX
-		XMVECTOR m_normal = XMVectorSet(m_model[j].normal.x, m_model[j].normal.y, m_model[j].normal.z, 0.0f);
-		XMVECTOR uDirt = XMVectorSet(uDir.x, uDir.y, uDir.z, 0.0f);
-		m_dotResult = XMVector3Dot(m_normal, uDirt);
-		m_Tangent = uDirt - m_normal * m_dotResult.m128_f32[0];
-		// model[j].tangent = m_Tangent;
-		// model[j+1].tangent = m_Tangent;
-		// model[j+2].tangent = m_Tangent;
-	}*/
 
 	CreateTangents(m_planeModel, indicesForV.size());
 
@@ -613,10 +553,12 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	text_vertices.clear();
 	indicesForV.clear();
 	indicesForT.clear();
-	indicesForN.clear();
+	indicesForN.clear();*/
+
+	//LoadTheGround();
 
 	//loading cube
-	loadObj.LoadObj("Cube.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
+	/*loadObj.LoadObj("Cube.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
 
 	m_vert = new unsigned int[indicesForV.size()];
 	m_text = new unsigned int[indicesForT.size()];
@@ -682,7 +624,9 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	skyindexData.SysMemPitch = 0;
 	skyindexData.SysMemSlicePitch = 0;
 
-	m_device->CreateBuffer(&skymodelIndDesc, &skyindexData, &m_skyboxIndexBuffer);
+	m_device->CreateBuffer(&skymodelIndDesc, &skyindexData, &m_skyboxIndexBuffer);*/
+
+	//LoadTheSkyBox();
 
 	//setting up the desc of the vertex buffer for star
 	m_vertexBuffer.Usage = D3D11_USAGE_IMMUTABLE;
@@ -700,11 +644,13 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), NULL, &m_vertexShader);
 	m_device->CreateVertexShader(Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), NULL, &m_vertexShaderForGeometry);
 	m_device->CreateVertexShader(Trivial_VS_ForNormalMapping, sizeof(Trivial_VS_ForNormalMapping), NULL, &m_vertexShaderForNormalMap); // normal map vertex shader
+	m_device->CreateVertexShader(Trivial_VS_ForTransparency, sizeof(Trivial_VS_ForTransparency), NULL, &m_vShaderForTransparency);
 	m_device->CreatePixelShader(Trivial_PS, sizeof(Trivial_PS), NULL, &m_pixelShader);
 	m_device->CreatePixelShader(Trivial_PS_Texture, sizeof(Trivial_PS_Texture), NULL, &m_pixelShaderForTexture);
 	m_device->CreatePixelShader(Trivial_PS_For_Skybox, sizeof(Trivial_PS_For_Skybox), NULL, &m_pixelShaderForSkybox);
 	m_device->CreatePixelShader(Trivial_PS_ForGeometry, sizeof(Trivial_PS_ForGeometry), NULL, &m_pixelShaderForGeometry);
 	m_device->CreatePixelShader(Trivial_PS_ForNormalMapping, sizeof(Trivial_PS_ForNormalMapping), NULL, &m_pixelShaderForNormalMap);   // normal map pixel shader
+	m_device->CreatePixelShader(Trivial_PS_ForTransparency, sizeof(Trivial_PS_ForTransparency), NULL, &m_pShaderForTransparency);
 	m_device->CreateGeometryShader(Trivial_GS, sizeof(Trivial_GS),NULL, &m_geometryShader);
 
 	D3D11_INPUT_ELEMENT_DESC m_inputLayout[] =
@@ -720,7 +666,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	D3D11_INPUT_ELEMENT_DESC m_inputLayoutForGS[] = 
 	{
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
 
 	m_device->CreateInputLayout(m_inputLayoutForGS, ARRAYSIZE(m_inputLayoutForGS), Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), &m_layoutForGeometryShader);
@@ -737,6 +683,14 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateInputLayout(m_inputLayoutForNM, ARRAYSIZE(m_inputLayoutForNM), Trivial_VS_ForNormalMapping, sizeof(Trivial_VS_ForNormalMapping), &m_layoutForNormalMap);
 	
+	D3D11_INPUT_ELEMENT_DESC m_inputLayoutForTransparency[] = 
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+
+	m_device->CreateInputLayout(m_inputLayoutForGS, ARRAYSIZE(m_inputLayoutForGS), Trivial_VS_ForTransparency, sizeof(Trivial_VS_ForTransparency), &m_layoutForTransparency);
+	
 	//setting up the desc of the constant buffer
 	m_constantBuffer.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	m_constantBuffer.Usage = D3D11_USAGE_DYNAMIC;
@@ -749,6 +703,19 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_constantData.pSysMem = &toScene;
 	m_constantBuffer.ByteWidth = sizeof(SEND_TO_SCENE);
 	m_device->CreateBuffer(&m_constantBuffer, &m_constantData, &m_cBuffer[1]);
+
+	/*//setting up the desc of the constant buffer for transparency
+	m_constBufferForTransparency.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	m_constBufferForTransparency.Usage = D3D11_USAGE_DYNAMIC;
+	m_constBufferForTransparency.ByteWidth = sizeof(SEND_TO_OBJECT);
+	m_constantBuffer.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	//give the subresource structure a pointer to the vertex data
+	m_constDataForTransparency.pSysMem = &toObject;
+	m_device->CreateBuffer(&m_constBufferForTransparency, &m_constDataForTransparency, &m_cBufferForTransparency[0]);
+	m_constDataForTransparency.pSysMem = &toScene;
+	m_constBufferForTransparency.ByteWidth = sizeof(SEND_TO_SCENE);
+	m_device->CreateBuffer(&m_constBufferForTransparency, &m_constDataForTransparency, &m_cBufferForTransparency[1]);*/
 
 	//Constant Buffer directional light set up for Normal Map
 	m_lightForNormalMap.diffColor = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -956,7 +923,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	texDescForRenderToScene.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	texDescForRenderToScene.MipLevels = 1;
 	texDescForRenderToScene.ArraySize = 1;
-	texDescForRenderToScene.SampleDesc.Count = 4;
+	texDescForRenderToScene.SampleDesc.Count = 1;
 	texDescForRenderToScene.CPUAccessFlags = 0;
 	texDescForRenderToScene.MiscFlags = 0;
 	m_device->CreateTexture2D(&texDescForRenderToScene, NULL, &m_texToRenderToScene);
@@ -970,7 +937,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	secondTexDescForRenderToScene.Format = DXGI_FORMAT_D32_FLOAT;
 	secondTexDescForRenderToScene.MipLevels = 1;
 	secondTexDescForRenderToScene.ArraySize = 1;
-	secondTexDescForRenderToScene.SampleDesc.Count = 4;
+	secondTexDescForRenderToScene.SampleDesc.Count = 1;
 	secondTexDescForRenderToScene.CPUAccessFlags = 0;
 	secondTexDescForRenderToScene.MiscFlags = 0;
 	m_device->CreateTexture2D(&secondTexDescForRenderToScene, NULL, &m_secondTexToRenderToScene);
@@ -980,7 +947,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	d_stencilForRenderToScene.Format = DXGI_FORMAT_D32_FLOAT;
 	d_stencilForRenderToScene.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 	d_stencilForRenderToScene.Texture2D.MipSlice = 0;
-	m_device->CreateDepthStencilView(m_texToRenderToScene, NULL, &m_depthStencilViewForRenderToScene);
+	m_device->CreateDepthStencilView(m_secondTexToRenderToScene, NULL, &m_depthStencilViewForRenderToScene);
 	
 	//setting up the render target view for rendering the scene 
 	renderTargetViewForRenderToScene.Format = texDescForRenderToScene.Format;
@@ -1002,12 +969,13 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	//CreateDDSTextureFromFile(m_device, NULL, NULL, &m_NullShaderView);
 	//passing info inside the dds texture loader for plane
 	//CreateDDSTextureFromFile(m_device, L"Textures/checkerboard.dds", NULL, &m_PlaneShaderView);
-	CreateDDSTextureFromFile(m_device, L"Textures/DSC_4439.dds", NULL, &m_PlaneShaderView);
+	CreateDDSTextureFromFile(m_device, L"Textures/Seamless ground sand texture (5).dds", NULL, &m_PlaneShaderView);
 	CreateDDSTextureFromFile(m_device, L"Textures/brickwall.dds", NULL, &m_SecondPlaneShaderView);
 	//setting up desc for skybox
 	CreateDDSTextureFromFile(m_device, L"mp_rip/OutputCube.dds", NULL, &m_SkyBoxShaderView);
 	//setting up desc for loading normal map texture
 	CreateDDSTextureFromFile(m_device, L"Textures/NormalMap (1).dds", NULL, &m_NormalMapView);
+	//CreateDDSTextureFromFile(m_device, NULL, NULL, &m_GeoShaderView);
 	//CreateDDSTextureFromFile();
 
 
@@ -1039,9 +1007,371 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_pixelPointerForNM = m_pixelShaderForTexture;
 	m_inputLayerPointForNM = m_layout;
 
+	m_shaderResourcePointerForNM = m_SecondPlaneShaderView;
+
 
 	bSplitScreen = false;
 }
+
+void D3D_DEMO::LoadTheModel()
+{
+
+	std::vector<float3> vert_vertices, norm_vertices;
+	std::vector<float2> text_vertices;
+	std::vector<unsigned int> indicesForV, indicesForT, indicesForN;
+	//unsigned int *vert_indices, *text_indices, *norm_indices;
+
+	//loading the 3D-Model : Ogre , calling the load obj function
+
+	vector<SIMPLE_VERTEX>_vertices;
+	vector<UINT>_indices;
+
+	//vert_vertices.resize(indicesForV.size());
+	if (LoadBinary("OgreOBJ.bin",_vertices, _indices ) == false)
+	{
+	loadObj.LoadObj("OgreOBJ.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
+
+		std::vector<unsigned int> vert_indices(indicesForV.size());
+		std::vector<unsigned int> text_indices(indicesForT.size());
+		std::vector<unsigned int> norm_indices(indicesForN.size());
+
+		/*vert_indices = new unsigned int[indicesForV.size()];
+		text_indices = new unsigned int[indicesForT.size()];
+		norm_indices = new unsigned int[indicesForN.size()];*/
+
+		/*unsigned int* model_indices = new unsigned int[indicesForV.size()];
+
+		m_model = new SIMPLE_VERTEX[indicesForV.size()];*/
+
+		modelSize = indicesForV.size();
+		_vertices.resize(modelSize);
+		_indices.resize(modelSize);
+
+		for (unsigned int i = 0; i < modelSize; i++)
+		{
+			vert_indices[i] = indicesForV[i];
+			norm_indices[i] = indicesForN[i];
+			text_indices[i] = indicesForT[i];
+			_indices[i] = i;
+		}
+
+		for (unsigned int j = 0; j < indicesForV.size(); j++)
+		{
+			_vertices[j].position.x = vert_vertices[vert_indices[j]].x + 5;
+			_vertices[j].position.y = vert_vertices[vert_indices[j]].y - 5;
+			_vertices[j].position.z = vert_vertices[vert_indices[j]].z;
+
+			_vertices[j].color = { 0, 1, 0, 0 };
+			_vertices[j].texture.x = text_vertices[text_indices[j]].x;
+			_vertices[j].texture.y = text_vertices[text_indices[j]].y;
+			_vertices[j].normal.x = norm_vertices[norm_indices[j]].x;
+			_vertices[j].normal.y = norm_vertices[norm_indices[j]].y;
+			_vertices[j].normal.z = norm_vertices[norm_indices[j]].z;
+		}
+
+
+		SaveBinary("OgreOBJ.bin", _vertices, _indices);
+	}
+	modelSize = _vertices.size();
+
+
+	//setting up model vertex buffer
+	D3D11_BUFFER_DESC modelVertDesc;
+	modelVertDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	modelVertDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	modelVertDesc.CPUAccessFlags = NULL;
+	modelVertDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * _vertices.size();
+	modelVertDesc.MiscFlags = NULL;
+	modelVertDesc.StructureByteStride = 0;
+
+	D3D11_SUBRESOURCE_DATA modelData;
+	modelData.pSysMem = &_vertices[0];
+	modelData.SysMemPitch = 0;
+	modelData.SysMemSlicePitch = 0;
+
+	m_device->CreateBuffer(&modelVertDesc, &modelData, &m_modelVertexBuffer);
+
+	//setting up the index buffer
+	D3D11_BUFFER_DESC modelIndDesc;
+	modelIndDesc.Usage = D3D11_USAGE_DEFAULT;
+	modelIndDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	modelIndDesc.CPUAccessFlags = NULL;
+	modelIndDesc.ByteWidth = sizeof(unsigned int) * _indices.size();
+	modelIndDesc.MiscFlags = NULL;
+	modelIndDesc.StructureByteStride = 0;
+
+	D3D11_SUBRESOURCE_DATA indexData;
+	indexData.pSysMem = &_indices[0];
+	indexData.SysMemPitch = 0;
+	indexData.SysMemSlicePitch = 0;
+
+	m_device->CreateBuffer(&modelIndDesc, &indexData, &m_modelIndexBuffer);
+
+
+	unsigned int m_modelSize = vert_vertices.size();
+	vert_vertices.clear();
+	norm_vertices.clear();
+	text_vertices.clear();
+	indicesForV.clear();
+	indicesForT.clear();
+	indicesForN.clear();
+
+
+
+}
+
+void D3D_DEMO::LoadTheGround()
+{
+	std::vector<float3> vert_vertices, norm_vertices;
+	std::vector<float2> text_vertices;
+	std::vector<unsigned int> indicesForV, indicesForT, indicesForN;
+
+	//unsigned int *m_vertForPlane, *m_textForPlane, *m_normForPlane;
+	
+	//loading the plane, calling the load function
+	loadObj.LoadObj("Plane.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
+
+	vector<SIMPLE_VERTEX> _vertices;
+	vector<UINT> _indices;
+
+	if (LoadBinary("Plane.bin", _vertices, _indices) == false)
+	{
+
+		std::vector<unsigned int>m_vertForPlane(indicesForV.size());
+		std::vector<unsigned int>m_textForPlane(indicesForT.size());
+		std::vector<unsigned int>m_normForPlane(indicesForN.size());
+
+		/*m_vertForPlane = new unsigned int[indicesForV.size()];
+		m_textForPlane = new unsigned int[indicesForT.size()];
+		m_normForPlane = new unsigned int[indicesForN.size()];*/
+
+		/*unsigned int* plane_model_indices = new unsigned int[indicesForV.size()];
+
+		m_planeModel = new SIMPLE_VERTEX[indicesForV.size()];*/
+
+		modelSizeForPlane = indicesForV.size();
+		_vertices.resize(modelSizeForPlane);
+		_indices.resize(modelSizeForPlane);
+
+		for (unsigned int i = 0; i < modelSizeForPlane; i++)
+		{
+			m_vertForPlane[i] = indicesForV[i];
+			m_normForPlane[i] = indicesForN[i];
+			m_textForPlane[i] = indicesForT[i];
+			_indices[i] = i;
+		}
+
+		for (unsigned int j = 0; j < indicesForV.size(); j++)
+		{
+			_vertices[j].position.x = vert_vertices[m_vertForPlane[j]].x;
+			_vertices[j].position.y = vert_vertices[m_vertForPlane[j]].y - 5;
+			_vertices[j].position.z = vert_vertices[m_vertForPlane[j]].z;
+
+			_vertices[j].color = { 0, 1, 0, 0 };
+			_vertices[j].texture.x = text_vertices[m_textForPlane[j]].x;
+			_vertices[j].texture.y = text_vertices[m_textForPlane[j]].y;
+			_vertices[j].normal.x = norm_vertices[m_normForPlane[j]].x;
+			_vertices[j].normal.y = norm_vertices[m_normForPlane[j]].y;
+			_vertices[j].normal.z = norm_vertices[m_normForPlane[j]].z;
+		}
+
+		SaveBinary("Plane.bin", _vertices, _indices);
+	}
+
+	modelSizeForPlane = _vertices.size();
+
+	CreateTangents(&_vertices[0]/*m_planeModel*/, indicesForV.size());
+
+	//setting up the plane model vertex buffer
+	D3D11_BUFFER_DESC modelVertDescForPlane;
+	modelVertDescForPlane.Usage = D3D11_USAGE_IMMUTABLE;
+	modelVertDescForPlane.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	modelVertDescForPlane.CPUAccessFlags = NULL;
+	modelVertDescForPlane.ByteWidth = sizeof(SIMPLE_VERTEX) * _vertices.size();
+	modelVertDescForPlane.MiscFlags = NULL;
+	modelVertDescForPlane.StructureByteStride = 0;
+
+	D3D11_SUBRESOURCE_DATA modelDataForPlane;
+	modelDataForPlane.pSysMem = &_vertices[0];
+	modelDataForPlane.SysMemPitch = 0;
+	modelDataForPlane.SysMemSlicePitch = 0;
+
+	m_device->CreateBuffer(&modelVertDescForPlane, &modelDataForPlane, &m_planeVertexBuffer);
+
+	//setting up the plane model index buffer
+	D3D11_BUFFER_DESC modelIndDescForPlane;
+	modelIndDescForPlane.Usage = D3D11_USAGE_DEFAULT;
+	modelIndDescForPlane.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	modelIndDescForPlane.CPUAccessFlags = NULL;
+	modelIndDescForPlane.ByteWidth = sizeof(unsigned int) * _indices.size();
+	modelIndDescForPlane.MiscFlags = NULL;
+	modelIndDescForPlane.StructureByteStride = 0;
+
+	D3D11_SUBRESOURCE_DATA indexDataForPlane;
+	indexDataForPlane.pSysMem = &_indices[0];
+	indexDataForPlane.SysMemPitch = 0;
+	indexDataForPlane.SysMemSlicePitch = 0;
+
+	m_device->CreateBuffer(&modelIndDescForPlane, &indexDataForPlane, &m_planeIndexBuffer);
+
+	unsigned int m_modelSizeForPlane = vert_vertices.size();
+	vert_vertices.clear();
+	norm_vertices.clear();
+	text_vertices.clear();
+	indicesForV.clear();
+	indicesForT.clear();
+	indicesForN.clear();
+
+}
+
+void D3D_DEMO::LoadTheSkyBox()
+{
+	std::vector<float3> vert_vertices, norm_vertices;
+	std::vector<float2> text_vertices;
+	std::vector<unsigned int> indicesForV, indicesForT, indicesForN;
+
+	//unsigned int *m_vert, *m_text, *m_norm;
+
+	//loading the skybox, calling the load obj funcion
+	loadObj.LoadObj("Cube.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
+
+	std::vector<unsigned int>m_vert(indicesForV.size());
+	std::vector<unsigned int>m_text(indicesForT.size());
+	std::vector<unsigned int>m_norm(indicesForN.size());
+
+
+	/*m_vert = new unsigned int[indicesForV.size()];
+	m_text = new unsigned int[indicesForT.size()];
+	m_norm = new unsigned int[indicesForN.size()];*/
+
+	m_skyModel = new SIMPLE_VERTEX[vert_vertices.size()];
+
+	modelSizeForSkybox = indicesForV.size();
+
+	for (unsigned int i = 0; i < modelSizeForSkybox; i++)
+	{
+		m_vert[i] = indicesForV[i];
+		m_text[i] = indicesForT[i];
+		m_norm[i] = indicesForN[i];
+	}
+
+	for (unsigned int j = 0; j < vert_vertices.size(); j++)
+	{
+		m_skyModel[j].position.x = vert_vertices[j].x;
+		m_skyModel[j].position.y = vert_vertices[j].y;
+		m_skyModel[j].position.z = vert_vertices[j].z;
+
+		m_skyModel[j].color = { 0, 1, 0, 0 };
+
+		m_skyModel[j].texture.x = text_vertices[j].x;
+		m_skyModel[j].texture.y = text_vertices[j].y;
+
+		m_skyModel[j].normal.x = norm_vertices[j].x;
+		m_skyModel[j].normal.y = norm_vertices[j].y;
+		m_skyModel[j].normal.z = norm_vertices[j].z;
+	}
+	unsigned int skyboxSize = vert_vertices.size();
+
+
+	//setting up skybox buffer
+	D3D11_BUFFER_DESC skymodelVertDesc;
+	skymodelVertDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	skymodelVertDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	skymodelVertDesc.CPUAccessFlags = NULL;
+	skymodelVertDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * skyboxSize;
+	skymodelVertDesc.MiscFlags = NULL;
+	skymodelVertDesc.StructureByteStride = sizeof(float) * 2;
+
+	D3D11_SUBRESOURCE_DATA skymodelData;
+	skymodelData.pSysMem = m_skyModel;
+	skymodelData.SysMemPitch = 0;
+	skymodelData.SysMemSlicePitch = 0;
+
+	m_device->CreateBuffer(&skymodelVertDesc, &skymodelData, &m_skyboxVertexBuffer);
+
+
+	//index buffer for skybox 
+	D3D11_BUFFER_DESC skymodelIndDesc;
+	skymodelIndDesc.Usage = D3D11_USAGE_DEFAULT;
+	skymodelIndDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	skymodelIndDesc.CPUAccessFlags = NULL;
+	skymodelIndDesc.ByteWidth = sizeof(unsigned int) * modelSizeForSkybox;
+	skymodelIndDesc.MiscFlags = NULL;
+	skymodelIndDesc.StructureByteStride = sizeof(float) * 2;
+
+	D3D11_SUBRESOURCE_DATA skyindexData;
+	skyindexData.pSysMem = &m_vert[0];
+	skyindexData.SysMemPitch = 0;
+	skyindexData.SysMemSlicePitch = 0;
+
+	m_device->CreateBuffer(&skymodelIndDesc, &skyindexData, &m_skyboxIndexBuffer);
+}
+
+
+void D3D_DEMO::SaveBinary(const char* _file, const vector<SIMPLE_VERTEX> _vertices, const vector<UINT> _indices)
+{
+	fstream out;
+
+	out.open(_file, ios_base::binary | ios_base::out);
+
+	if (out.is_open())
+	{
+		size_t vertCount = _vertices.size();
+		size_t indexCount = _indices.size();
+
+		if (vertCount > 0)
+		{
+			out.write((char*)&vertCount, sizeof(vertCount));
+			out.write((char*)&_vertices[0], sizeof(SIMPLE_VERTEX) * vertCount);
+		}
+
+		if (indexCount > 0)
+		{
+			out.write((char*)&indexCount, sizeof(indexCount));
+			out.write((char*)&_indices[0], sizeof(UINT) * indexCount);
+		}
+
+	
+	}
+
+	out.close();
+}
+
+bool D3D_DEMO::LoadBinary(const char* _file, vector<SIMPLE_VERTEX>& _vertices, vector<UINT>& _indices)
+{
+	ifstream in;
+
+	in.open(_file, ios_base::binary | ios_base::in);
+
+	if (in.is_open())
+	{
+		size_t vertCount = 0;
+		in.read((char*)&vertCount, sizeof(vertCount));
+
+		if (vertCount > 0)
+		{
+			_vertices.resize(vertCount);
+			in.read((char*)&_vertices[0], sizeof(SIMPLE_VERTEX) * vertCount);
+		}
+
+
+		size_t indexCount = 0;
+		in.read((char*)&indexCount, sizeof(indexCount));
+
+		if (indexCount > 0)
+		{
+			_indices.resize(indexCount);
+			in.read((char*)&_indices[0], sizeof(UINT) * indexCount);
+		}
+	}
+	else
+		return false;
+
+
+	in.close();
+	return true;
+}
+
 
 void D3D_DEMO::CreateTangents(SIMPLE_VERTEX* model, UINT numIndicies)
 {
@@ -1159,6 +1489,83 @@ D3D_DEMO * D3D_DEMO::GetInstance()
 {
 	static D3D_DEMO instance;
 	return &instance;
+}
+
+void D3D_DEMO::RenderTransparency()
+{
+	float4 vec1, vec2, vec3;
+	XMMATRIX Cube1, Cube2, Cube3;
+	toScene.viewMatrix = XMMatrixInverse(NULL, temp.view);
+
+	vec1 = (float4&)(Cube1.r[3] - toScene.viewMatrix.r[3]);
+	vec2 = (float4&)(Cube2.r[2] - toScene.viewMatrix.r[2]);
+	vec3 = (float4&)(Cube2.r[1] - toScene.viewMatrix.r[1]);
+
+	float dist1 = sqrt((vec1.x * vec1.x) + (vec1.y * vec1.y) + (vec1.z * vec1.z));
+	float dist2 = sqrt((vec2.x * vec2.x) + (vec2.y * vec2.y) + (vec2.z * vec2.z));
+	float dist3 = sqrt((vec3.x * vec3.x) + (vec3.y * vec3.y) + (vec3.z * vec3.z));
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSource;
+	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
+	SEND_TO_OBJECT *m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
+	*m_temp = toObject;
+	m_deviceContext->Unmap(m_cBuffer[0], 0);
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSource2;
+	m_deviceContext->Map(m_cBuffer[1], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource2);
+	SEND_TO_SCENE *temp2 = ((SEND_TO_SCENE*)m_mapSource2.pData);
+	*temp2 = toScene;
+	m_deviceContext->Unmap(m_cBuffer[1], 0);
+
+	
+
+
+	if (dist1 > dist2)
+	{
+		if (dist1 > dist3)
+		{
+			//Render dist1;
+			if (dist2 > dist3)
+			{
+				//render dist2;
+				//render dist3;
+			}
+			else
+			{
+				//render dist3;
+				//render dist4;
+			}
+		}
+		else
+		{
+			//render dist3;
+			//render dist2;
+			//render dist1;
+		}
+	}
+
+	else if (dist2 > dist3)
+	{
+		//render dist2;
+		if (dist1 > dist3)
+		{
+			//render dist1;
+			//render dist3;
+		}
+		else
+		{
+			//render dist3;
+			//render dist1;
+		}
+	}
+
+	else
+	{
+		//render dist3;
+		//render dist2;
+		//render dist1;
+	}
+	
 }
 
 bool D3D_DEMO::Run()
@@ -1342,6 +1749,8 @@ bool D3D_DEMO::Run()
 		bSplitScreen = !bSplitScreen;
 	}
 
+	RenderToScene();
+
 	if(bSplitScreen == false)
 	{
 		//rotation of the star
@@ -1438,7 +1847,9 @@ bool D3D_DEMO::Run()
 		m_deviceContext->IASetInputLayout(m_layoutForGeometryShader);
 		m_deviceContext->GSSetConstantBuffers(0, 2, m_cBuffer);
 		m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
+		m_deviceContext->PSSetShaderResources(0, 1, &m_shaderForRenderToScene);
 		m_deviceContext->Draw(2, 0);
+		m_deviceContext->PSSetShaderResources(0, 1, &m_GeoShaderView);
 
 		//setting up the constant buffers for three diff lights
 		m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
@@ -1463,8 +1874,9 @@ bool D3D_DEMO::Run()
 			m_pixelPointerForNM = m_pixelShaderForTexture;
 			m_vertexPointerForNM = m_vertexShader;
 			m_inputLayerPointForNM = m_layout;
+			
 			//m_shaderResourcePointerForNM = m_PlaneShaderView;
-			//m_shaderResourcePointerForNM = m_SecondPlaneShaderView;
+			m_shaderResourcePointerForNM = m_SecondPlaneShaderView;
 		}
 		if (GetAsyncKeyState('8'))
 		{
@@ -1472,6 +1884,10 @@ bool D3D_DEMO::Run()
 			m_vertexPointerForNM = m_vertexShaderForNormalMap;
 			m_inputLayerPointForNM = m_layoutForNormalMap;
 			//m_shaderResourcePointerForNM = m_NormalMapView;
+			//m_deviceContext->PSSetShaderResources(1, 1, &m_NormalMapView);
+
+			m_shaderResourcePointerForNM = m_NormalMapView;
+
 		}
 
 		// plane
@@ -1486,9 +1902,9 @@ bool D3D_DEMO::Run()
 		m_deviceContext->GSSetShader(NULL, NULL, NULL);
 		m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
 		m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-		//m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
-		m_deviceContext->PSSetShaderResources(0, 1, &m_SecondPlaneShaderView);
-		m_deviceContext->PSSetShaderResources(1, 1, &m_NormalMapView);
+		//m_deviceContext->PSSetShaderResources(2, 1, &m_PlaneShaderView);
+		m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
+		m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM);
 		//m_deviceContext->PSSetShaderResources(2, 1, &m_secondNormalMapView);
 		//m_deviceContext->PSSetShaderResources(0, 1, &m_shaderResourcePointerForNM);
 		//m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM);
@@ -1523,6 +1939,39 @@ void D3D_DEMO::RenderToScene()
 	m_deviceContext->ClearDepthStencilView(m_depthStencilViewForRenderToScene, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 	toObject.worldMatrix = skyboxWorld;
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSource;
+	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
+	SEND_TO_OBJECT *m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
+	*m_temp = toObject;
+	//memcpy(m_mapSource.pData, &toObject, sizeof(&toObject));
+	m_deviceContext->Unmap(m_cBuffer[0], 0);
+
+	D3D11_MAPPED_SUBRESOURCE m_mapSource2;
+	m_deviceContext->Map(m_cBuffer[1], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource2);
+	SEND_TO_SCENE *temp2 = ((SEND_TO_SCENE*)m_mapSource2.pData);
+	*temp2 = toScene;
+	//memcpy(m_mapSource2.pData, &toScene, sizeof(&toScene));
+	m_deviceContext->Unmap(m_cBuffer[1], 0);
+
+	
+	unsigned int stride = sizeof(SIMPLE_VERTEX);
+	unsigned int offsets = 0;
+
+	//skybox
+	m_deviceContext->RSSetState(m_rasterForSkybox);
+	m_deviceContext->VSSetShader(m_vertexShader, NULL, NULL);
+	m_deviceContext->VSSetConstantBuffers(0, 2, m_cBuffer);
+	m_deviceContext->PSSetShader(m_pixelShaderForSkybox, NULL, NULL);
+	m_deviceContext->IASetVertexBuffers(0, 1, &m_skyboxVertexBuffer, &stride, &offsets);
+	m_deviceContext->IASetIndexBuffer(m_skyboxIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	m_deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_deviceContext->IASetInputLayout(m_layout);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_SkyBoxShaderView);
+	m_deviceContext->PSSetSamplers(0, 1, &m_sampleTexture);
+	m_deviceContext->DrawIndexed(modelSizeForSkybox, 0, 0);
+
+	m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 }
 void D3D_DEMO::secondViewPort()
@@ -1633,7 +2082,9 @@ void D3D_DEMO::secondViewPort()
 	m_deviceContext->IASetInputLayout(m_layoutForGeometryShader);
 	m_deviceContext->GSSetConstantBuffers(0, 2, m_cBuffer);
 	m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_shaderForRenderToScene);
 	m_deviceContext->Draw(2, 0);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_GeoShaderView);
 
 	//setting up the constant buffers for three diff lights
 	m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
@@ -1774,7 +2225,9 @@ void D3D_DEMO::thirdViewPort()
 	m_deviceContext->IASetInputLayout(m_layoutForGeometryShader);
 	m_deviceContext->GSSetConstantBuffers(0, 2, m_cBuffer);
 	m_deviceContext->GSSetShader(m_geometryShader, NULL, NULL);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_shaderForRenderToScene);
 	m_deviceContext->Draw(2, 0);
+	m_deviceContext->PSSetShaderResources(0, 1, &m_GeoShaderView);
 
 	//setting up the constant buffers for three diff lights
 	m_deviceContext->PSSetConstantBuffers(0, 1, &m_cBufferForLight);
@@ -1823,9 +2276,9 @@ bool D3D_DEMO::ShutDown()
 	SAFE_RELEASE(m_SwapChain);
 	SAFE_RELEASE(m_deviceContext);
 	SAFE_RELEASE(m_renderTargetView);
-
+	SAFE_RELEASE(m_renderTarView);
 	SAFE_RELEASE(m_depthStencilView);
-
+	SAFE_RELEASE(m_depthStencilViewForRenderToScene);
 	SAFE_RELEASE(m_rasterState);
 	SAFE_RELEASE(m_rasterForSkybox);
 	SAFE_RELEASE(m_matrixBuffer);
@@ -1837,6 +2290,8 @@ bool D3D_DEMO::ShutDown()
 	SAFE_RELEASE(m_cBufferForNormalMap);
 	SAFE_RELEASE(m_iBuffer);
 	SAFE_RELEASE(z_buffer);
+	SAFE_RELEASE(m_texToRenderToScene);
+	SAFE_RELEASE(m_secondTexToRenderToScene);
 	SAFE_RELEASE(m_vertexShader);
 	SAFE_RELEASE(m_vertexShaderForGeometry);
 	//SAFE_RELEASE(m_vertexPointerForNM);
@@ -1863,6 +2318,7 @@ bool D3D_DEMO::ShutDown()
 	SAFE_RELEASE(m_SkyBoxShaderView);
 	//SAFE_RELEASE(m_shaderResourcePointerForNM);
 	SAFE_RELEASE(m_NormalMapView);
+	SAFE_RELEASE(m_shaderForRenderToScene);
 	//SAFE_RELEASE(m_secondNormalMapView);
 //	m_NullShaderView->Release();
 	SAFE_RELEASE(m_secondTexture);
@@ -1876,11 +2332,8 @@ bool D3D_DEMO::ShutDown()
 	//ptrToBackBuffer
 	SAFE_RELEASE(ptrToBackBuffer);
 	delete m_model;
-	delete vert_indices, text_indices, norm_indices;
 	delete m_skyModel;
-	delete m_vert, m_text, m_norm;
 	delete m_planeModel;
-	delete m_vertForPlane, m_textForPlane, m_normForPlane;
 	ReportLiveObjects();
 	SAFE_RELEASE(m_device);
 	

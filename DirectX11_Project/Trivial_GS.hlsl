@@ -10,6 +10,7 @@ struct GS_OUTPUT
 {
 	float4 pos : SV_POSITION;
 	float4 color : COLOR;
+	float2 uv : UV;                                                       
 };
 
 cbuffer OBJECT : register(b0)
@@ -28,10 +29,10 @@ void main(point GS_IN input[1], uint id : SV_GSInstanceID, inout TriangleStream 
 {
 	GS_OUTPUT verts[4] =
 	{
-		{float4(-0.5f + input[0].position.x, 0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color},
-		{float4(0.5f + input[0].position.x, 0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color},
-		{float4(-0.5f + input[0].position.x, -0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color},
-		{float4(0.5f + input[0].position.x, -0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color}
+		{float4(-0.5f + input[0].position.x, 0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color, float2(0,0)}, 
+		{float4(0.5f + input[0].position.x, 0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color, float2(1,0)},
+		{float4(-0.5f + input[0].position.x, -0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color, float2(0,1)},
+		{float4(0.5f + input[0].position.x, -0.5f + input[0].position.y, -0.5f + input[0].position.z,1), input[0].color, float2(1,1)}
 	};
 
 	//prep triangle for rasterization
