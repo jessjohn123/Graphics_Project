@@ -174,9 +174,11 @@ class D3D_DEMO
 	ID3D11ShaderResourceView *m_SkyBoxShaderView;
 	ID3D11ShaderResourceView *m_NullShaderView = NULL;
 	ID3D11ShaderResourceView *m_NormalMapView;								// Normal Map shader resource
+	//ID3D11ShaderResourceView *m_secondNormalMapView;
 	ID3D11ShaderResourceView *m_GeoShaderView = NULL;
 	//ID3D11ShaderResourceView *m_secondNormalMapView;
 	ID3D11ShaderResourceView *m_shaderResourcePointerForNM;
+	//ID3D11ShaderResourceView *m_shaderResourcePointerForNM2;
 	ID3D11ShaderResourceView *m_shaderForRenderToScene;
 	ID3D11Texture2D *m_secondTexture;
 	ID3D11Texture2D *m_texToRenderToScene;
@@ -200,11 +202,7 @@ class D3D_DEMO
 	bool bSplitScreen;
 	XTime time;
 
-	//For Transparency 
-	//ID3D11Buffer *m_cBufferForTransparency[2];
-	ID3D11VertexShader *m_vShaderForTransparency;
-	ID3D11PixelShader *m_pShaderForTransparency;
-	ID3D11InputLayout *m_layoutForTransparency;
+	
 	
 
 	unsigned int indices[60] = { 0,1,10,1,2,10,2,3,10,3,4,10,4,5,10,5,6,10,6,7,10,7,8,10,8,9,10,9,0,10,
@@ -225,7 +223,6 @@ public:
 	void LoadTheModel();
 	void LoadTheGround();
 	void LoadTheSkyBox();
-	void RenderTransparency();
 
 	void SaveBinary(const char* _file, const vector<SIMPLE_VERTEX> _vertices, const vector<UINT> _indices);
 	bool LoadBinary(const char* _file, vector<SIMPLE_VERTEX>& _vertices, vector<UINT>& _indices);
@@ -288,9 +285,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	D3D11_BUFFER_DESC m_vertexBufferDescForGeometry = {};
 	D3D11_SUBRESOURCE_DATA m_vertexDataForGeometry = {};
 
-	//For Transaprency
-	//D3D11_BUFFER_DESC m_constBufferForTransparency = {};
-	//D3D11_SUBRESOURCE_DATA m_constDataForTransparency = {};
+	
 
 	//Render the scene to the texture
 	D3D11_TEXTURE2D_DESC texDescForRenderToScene;
@@ -644,13 +639,11 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), NULL, &m_vertexShader);
 	m_device->CreateVertexShader(Trivial_VS_ForGeometry, sizeof(Trivial_VS_ForGeometry), NULL, &m_vertexShaderForGeometry);
 	m_device->CreateVertexShader(Trivial_VS_ForNormalMapping, sizeof(Trivial_VS_ForNormalMapping), NULL, &m_vertexShaderForNormalMap); // normal map vertex shader
-	m_device->CreateVertexShader(Trivial_VS_ForTransparency, sizeof(Trivial_VS_ForTransparency), NULL, &m_vShaderForTransparency);
 	m_device->CreatePixelShader(Trivial_PS, sizeof(Trivial_PS), NULL, &m_pixelShader);
 	m_device->CreatePixelShader(Trivial_PS_Texture, sizeof(Trivial_PS_Texture), NULL, &m_pixelShaderForTexture);
 	m_device->CreatePixelShader(Trivial_PS_For_Skybox, sizeof(Trivial_PS_For_Skybox), NULL, &m_pixelShaderForSkybox);
 	m_device->CreatePixelShader(Trivial_PS_ForGeometry, sizeof(Trivial_PS_ForGeometry), NULL, &m_pixelShaderForGeometry);
 	m_device->CreatePixelShader(Trivial_PS_ForNormalMapping, sizeof(Trivial_PS_ForNormalMapping), NULL, &m_pixelShaderForNormalMap);   // normal map pixel shader
-	m_device->CreatePixelShader(Trivial_PS_ForTransparency, sizeof(Trivial_PS_ForTransparency), NULL, &m_pShaderForTransparency);
 	m_device->CreateGeometryShader(Trivial_GS, sizeof(Trivial_GS),NULL, &m_geometryShader);
 
 	D3D11_INPUT_ELEMENT_DESC m_inputLayout[] =
@@ -683,13 +676,6 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 
 	m_device->CreateInputLayout(m_inputLayoutForNM, ARRAYSIZE(m_inputLayoutForNM), Trivial_VS_ForNormalMapping, sizeof(Trivial_VS_ForNormalMapping), &m_layoutForNormalMap);
 	
-	D3D11_INPUT_ELEMENT_DESC m_inputLayoutForTransparency[] = 
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-	};
-
-	m_device->CreateInputLayout(m_inputLayoutForGS, ARRAYSIZE(m_inputLayoutForGS), Trivial_VS_ForTransparency, sizeof(Trivial_VS_ForTransparency), &m_layoutForTransparency);
 	
 	//setting up the desc of the constant buffer
 	m_constantBuffer.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -704,18 +690,6 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_constantBuffer.ByteWidth = sizeof(SEND_TO_SCENE);
 	m_device->CreateBuffer(&m_constantBuffer, &m_constantData, &m_cBuffer[1]);
 
-	/*//setting up the desc of the constant buffer for transparency
-	m_constBufferForTransparency.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	m_constBufferForTransparency.Usage = D3D11_USAGE_DYNAMIC;
-	m_constBufferForTransparency.ByteWidth = sizeof(SEND_TO_OBJECT);
-	m_constantBuffer.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	//give the subresource structure a pointer to the vertex data
-	m_constDataForTransparency.pSysMem = &toObject;
-	m_device->CreateBuffer(&m_constBufferForTransparency, &m_constDataForTransparency, &m_cBufferForTransparency[0]);
-	m_constDataForTransparency.pSysMem = &toScene;
-	m_constBufferForTransparency.ByteWidth = sizeof(SEND_TO_SCENE);
-	m_device->CreateBuffer(&m_constBufferForTransparency, &m_constDataForTransparency, &m_cBufferForTransparency[1]);*/
 
 	//Constant Buffer directional light set up for Normal Map
 	m_lightForNormalMap.diffColor = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -802,15 +776,6 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_indexData.pSysMem = &indices;
 	m_device->CreateBuffer(&m_indexBuffer, &m_indexData, &m_iBuffer);
 
-	////setting up the desc of the light dynamic constant buffer for normal map
-	//lightBufferForNormalMapDesc.Usage = D3D11_USAGE_DYNAMIC;
-	//lightBufferForNormalMapDesc.ByteWidth = sizeof(m_lightForNormalMap);
-	//lightBufferForNormalMapDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	//lightBufferForNormalMapDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	//lightBufferForNormalMapDesc.MiscFlags = 0;
-	//lightBufferForNormalMapDesc.StructureByteStride = 0;
-
-	//m_device->CreateBuffer(&lightBufferForNormalMapDesc, NULL, &m_DirLightBufferForNormalMap);
 
 	//setting up the desc of the light dynamic constant buffer 
 	lightBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -909,7 +874,7 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_RasterDesc.DepthBiasClamp = 0.0f;
 	m_RasterDesc.DepthClipEnable = true;
 	m_RasterDesc.ScissorEnable = false;
-	m_RasterDesc.MultisampleEnable = false;
+	m_RasterDesc.MultisampleEnable = true;
 	m_RasterDesc.AntialiasedLineEnable = true;
 
 	m_device->CreateRasterizerState(&m_RasterDesc, &m_rasterState);
@@ -975,8 +940,8 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	CreateDDSTextureFromFile(m_device, L"mp_rip/OutputCube.dds", NULL, &m_SkyBoxShaderView);
 	//setting up desc for loading normal map texture
 	CreateDDSTextureFromFile(m_device, L"Textures/NormalMap (1).dds", NULL, &m_NormalMapView);
-	//CreateDDSTextureFromFile(m_device, NULL, NULL, &m_GeoShaderView);
-	//CreateDDSTextureFromFile();
+	//CreateDDSTextureFromFile(m_device, L"Textures/NormalMap (4).dds", NULL, &m_secondNormalMapView);
+	
 
 
 	//raster desc for skybox
@@ -1008,7 +973,8 @@ void D3D_DEMO::Initialize(HINSTANCE hinst, WNDPROC proc)
 	m_inputLayerPointForNM = m_layout;
 
 	m_shaderResourcePointerForNM = m_SecondPlaneShaderView;
-
+	//m_shaderResourcePointerForNM = m_PlaneShaderView;
+	//m_shaderResourcePointerForNM2 = m_SecondPlaneShaderView;
 
 	bSplitScreen = false;
 }
@@ -1129,13 +1095,14 @@ void D3D_DEMO::LoadTheGround()
 	//unsigned int *m_vertForPlane, *m_textForPlane, *m_normForPlane;
 	
 	//loading the plane, calling the load function
-	loadObj.LoadObj("Plane.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
 
 	vector<SIMPLE_VERTEX> _vertices;
 	vector<UINT> _indices;
 
+	loadObj.LoadObj("Plane.obj", vert_vertices, text_vertices, norm_vertices, indicesForV, indicesForT, indicesForN);
 	if (LoadBinary("Plane.bin", _vertices, _indices) == false)
 	{
+	
 
 		std::vector<unsigned int>m_vertForPlane(indicesForV.size());
 		std::vector<unsigned int>m_textForPlane(indicesForT.size());
@@ -1491,83 +1458,6 @@ D3D_DEMO * D3D_DEMO::GetInstance()
 	return &instance;
 }
 
-void D3D_DEMO::RenderTransparency()
-{
-	float4 vec1, vec2, vec3;
-	XMMATRIX Cube1, Cube2, Cube3;
-	toScene.viewMatrix = XMMatrixInverse(NULL, temp.view);
-
-	vec1 = (float4&)(Cube1.r[3] - toScene.viewMatrix.r[3]);
-	vec2 = (float4&)(Cube2.r[2] - toScene.viewMatrix.r[2]);
-	vec3 = (float4&)(Cube2.r[1] - toScene.viewMatrix.r[1]);
-
-	float dist1 = sqrt((vec1.x * vec1.x) + (vec1.y * vec1.y) + (vec1.z * vec1.z));
-	float dist2 = sqrt((vec2.x * vec2.x) + (vec2.y * vec2.y) + (vec2.z * vec2.z));
-	float dist3 = sqrt((vec3.x * vec3.x) + (vec3.y * vec3.y) + (vec3.z * vec3.z));
-
-	D3D11_MAPPED_SUBRESOURCE m_mapSource;
-	m_deviceContext->Map(m_cBuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource);
-	SEND_TO_OBJECT *m_temp = ((SEND_TO_OBJECT*)m_mapSource.pData);
-	*m_temp = toObject;
-	m_deviceContext->Unmap(m_cBuffer[0], 0);
-
-	D3D11_MAPPED_SUBRESOURCE m_mapSource2;
-	m_deviceContext->Map(m_cBuffer[1], 0, D3D11_MAP_WRITE_DISCARD, 0, &m_mapSource2);
-	SEND_TO_SCENE *temp2 = ((SEND_TO_SCENE*)m_mapSource2.pData);
-	*temp2 = toScene;
-	m_deviceContext->Unmap(m_cBuffer[1], 0);
-
-	
-
-
-	if (dist1 > dist2)
-	{
-		if (dist1 > dist3)
-		{
-			//Render dist1;
-			if (dist2 > dist3)
-			{
-				//render dist2;
-				//render dist3;
-			}
-			else
-			{
-				//render dist3;
-				//render dist4;
-			}
-		}
-		else
-		{
-			//render dist3;
-			//render dist2;
-			//render dist1;
-		}
-	}
-
-	else if (dist2 > dist3)
-	{
-		//render dist2;
-		if (dist1 > dist3)
-		{
-			//render dist1;
-			//render dist3;
-		}
-		else
-		{
-			//render dist3;
-			//render dist1;
-		}
-	}
-
-	else
-	{
-		//render dist3;
-		//render dist2;
-		//render dist1;
-	}
-	
-}
-
 bool D3D_DEMO::Run()
 {
 	time.Signal();
@@ -1875,19 +1765,22 @@ bool D3D_DEMO::Run()
 			m_vertexPointerForNM = m_vertexShader;
 			m_inputLayerPointForNM = m_layout;
 			
-			//m_shaderResourcePointerForNM = m_PlaneShaderView;
-			m_shaderResourcePointerForNM = m_SecondPlaneShaderView;
+			m_shaderResourcePointerForNM = m_SecondPlaneShaderView; 
+
+			/*m_shaderResourcePointerForNM = m_PlaneShaderView;
+			m_shaderResourcePointerForNM2 = m_SecondPlaneShaderView;*/
 		}
 		if (GetAsyncKeyState('8'))
 		{
 			m_pixelPointerForNM = m_pixelShaderForNormalMap;
 			m_vertexPointerForNM = m_vertexShaderForNormalMap;
 			m_inputLayerPointForNM = m_layoutForNormalMap;
-			//m_shaderResourcePointerForNM = m_NormalMapView;
-			//m_deviceContext->PSSetShaderResources(1, 1, &m_NormalMapView);
+			
+			m_shaderResourcePointerForNM = m_NormalMapView;  
 
-			m_shaderResourcePointerForNM = m_NormalMapView;
-
+			/*m_shaderResourcePointerForNM = m_NormalMapView;
+			m_shaderResourcePointerForNM2 = m_secondNormalMapView;*/
+	
 		}
 
 		// plane
@@ -1902,12 +1795,17 @@ bool D3D_DEMO::Run()
 		m_deviceContext->GSSetShader(NULL, NULL, NULL);
 		m_deviceContext->IASetVertexBuffers(0, 1, &m_planeVertexBuffer, &stride, &offsets);
 		m_deviceContext->IASetIndexBuffer(m_planeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-		//m_deviceContext->PSSetShaderResources(2, 1, &m_PlaneShaderView);
+		
+		/*m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
+		m_deviceContext->PSSetShaderResources(1, 1, &m_SecondPlaneShaderView);
+		m_deviceContext->PSSetShaderResources(2, 1, &m_NormalMapView);
+		m_deviceContext->PSSetShaderResources(3, 1, &m_secondNormalMapView);
+		m_deviceContext->PSSetShaderResources(0, 1, &m_shaderResourcePointerForNM);
+		m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM2);*/
+
 		m_deviceContext->PSSetShaderResources(0, 1, &m_PlaneShaderView);
-		m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM);
-		//m_deviceContext->PSSetShaderResources(2, 1, &m_secondNormalMapView);
-		//m_deviceContext->PSSetShaderResources(0, 1, &m_shaderResourcePointerForNM);
-		//m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM);
+		m_deviceContext->PSSetShaderResources(1, 1, &m_shaderResourcePointerForNM);			//the original way
+		
 		m_deviceContext->DrawIndexed(modelSizeForPlane, 0, 0);
 		m_deviceContext->PSSetShaderResources(1, 1, &m_NullShaderView);
 	}
